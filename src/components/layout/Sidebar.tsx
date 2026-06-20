@@ -1,0 +1,75 @@
+// src/components/layout/Sidebar.tsx
+"use client";
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
+export function Sidebar() {
+  const pathname = usePathname();
+
+  const navItems = [
+    { name: 'Kasir', href: '/', icon: 'point_of_sale' },
+    { name: 'Produk', href: '/produk', icon: 'inventory_2' },
+    { name: 'Transaksi', href: '/transaksi', icon: 'receipt_long' },
+    { name: 'Member', href: '/member', icon: 'group' },
+    { name: 'Laporan', href: '/laporan', icon: 'analytics' },
+    { name: 'Pengaturan', href: '/pengaturan', icon: 'settings' },
+  ];
+
+  return (
+    <nav className="fixed left-0 top-0 h-full flex flex-col z-50 bg-surface border-r border-border w-sidebar-collapsed hover:w-sidebar-expanded transition-all duration-300 group overflow-hidden">
+      
+      {/* Brand Header */}
+      <div className="h-16 flex items-center px-4 border-b border-border shrink-0">
+        <div className="w-8 h-8 rounded bg-primary-container flex items-center justify-center shrink-0">
+          <span className="material-symbols-outlined text-background font-bold text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+            storefront
+          </span>
+        </div>
+        <div className="flex flex-col ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+          <span className="text-[18px] font-bold text-primary leading-tight">TokoKu POS</span>
+          <span className="text-[11px] font-semibold text-text-secondary tracking-wide">Terminal 01</span>
+        </div>
+      </div>
+
+      {/* Navigation Links */}
+      <div className="flex-1 py-4 flex flex-col gap-2 overflow-y-auto px-2">
+        {navItems.map((item) => {
+          const isActive = pathname === item.href;
+          
+          return (
+            <Link 
+              key={item.href} 
+              href={item.href}
+              className={`flex items-center gap-4 px-3 py-3 rounded-lg transition-transform scale-95 active:scale-90 ${
+                isActive 
+                  ? 'text-primary border-l-4 border-primary bg-primary-container/10 font-medium' 
+                  : 'text-on-surface-variant hover:text-text-primary hover:bg-surface-container-high'
+              }`}
+            >
+              <span className="material-symbols-outlined shrink-0" style={isActive ? { fontVariationSettings: "'FILL' 1" } : {}}>
+                {item.icon}
+              </span>
+              <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap text-sm">
+                {item.name}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Footer Profile */}
+      <div className="p-4 border-t border-border mt-auto flex items-center shrink-0">
+        <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center shrink-0 border border-border">
+          <span className="material-symbols-outlined text-text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>
+            account_circle
+          </span>
+        </div>
+        <div className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap flex flex-col">
+          <span className="text-[12px] font-medium text-text-primary">Admin Kasir</span>
+          <span className="text-[10px] text-text-secondary">Terhubung</span>
+        </div>
+      </div>
+    </nav>
+  );
+}

@@ -1,0 +1,70 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  // Baris 'url = env("DATABASE_URL")' dihapus di sini sesuai aturan Prisma 7
+}
+
+model Product {
+  id                String              @id @default(uuid())
+  sku               String              @unique
+  name              String
+  priceRetail       Float
+  priceWholesale    Float?
+  wholesaleMinQty   Int?                @default(0)
+  stock             Int                 @default(0)
+  minStockAlert     Int                 @default(5)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  TransactionDetail TransactionDetail[]
+}
+
+model Member {
+  id          String        @id @default(uuid())
+  phone       String        @unique
+  name        String
+  joinedAt    DateTime      @default(now())
+  Transaction Transaction[]
+}
+
+model Transaction {
+  id             String              @id @default(uuid())
+  receiptNumber  String              @unique
+  memberId       String?
+  totalAmount    Float
+  paymentMethod  String              @default("cash") // 'cash' | 'qris' | 'debit'
+  cashReceived   Float?              // Hanya diisi untuk cash
+  change         Float?              // Hanya diisi untuk cash
+  approvalCode   String?             // Hanya diisi untuk debit (4-8 char, uppercase)
+  isVoid         Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  member         Member?             @relation(fields: [memberId], references: [id])
+  details        TransactionDetail[]
+}
+
+model TransactionDetail {
+  id            String      @id @default(uuid())
+  transactionId String
+  productId     String
+  quantity      Int
+  priceAtTime   Float
+  subtotal      Float
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  product       Product     @relation(fields: [productId], references: [id])
+}
+
+model SyncQueue {
+  id           String   @id @default(uuid())
+  tableName    String
+  recordId     String
+  operation    String
+  payload      String
+  status       String   @default("PENDING")
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

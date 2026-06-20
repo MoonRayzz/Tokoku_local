@@ -1,26 +1,123 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Colors - Dark Mode Emerald Theme */
+  --color-surface: #161B22;
+  --color-on-primary-container: #00422b;
+  --color-on-primary-fixed: #002113;
+  --color-primary-fixed: #6ffbbe;
+  --color-primary: #4edea3;
+  --color-error: #ffb4ab;
+  --color-on-background: #dfe2eb;
+  --color-text-secondary: #8B949E;
+  --color-on-surface: #dfe2eb;
+  --color-primary-container: #10b981;
+  --color-surface-tint: #4edea3;
+  --color-warning: #F59E0B;
+  --color-surface-container-lowest: #0a0e14;
+  --color-surface-container: #1c2026;
+  --color-outline: #86948a;
+  --color-inverse-surface: #dfe2eb;
+  --color-danger: #F43F5E;
+  --color-surface-container-low: #181c22;
+  --color-outline-variant: #3c4a42;
+  --color-background: #0D1117;
+  --color-inverse-primary: #006c49;
+  --color-surface-variant: #31353c;
+  --color-inverse-on-surface: #2d3137;
+  --color-surface-container-high: #262a31;
+  --color-on-surface-variant: #bbcabf;
+  --color-surface-bright: #353940;
+  --color-surface-container-highest: #31353c;
+  --color-surface-dim: #10141a;
+  --color-text-primary: #F0F6FC;
+  --color-on-primary: #003824;
+  --color-border: #30363D;
+
+  /* Spacing Configuration */
+  --spacing-sidebar-expanded: 240px;
+  --spacing-margin-mobile: 16px;
+  --spacing-gutter: 16px;
+  --spacing-base: 4px;
+  --spacing-sidebar-collapsed: 64px;
+  --spacing-margin-desktop: 24px;
+
+  /* Custom Animations */
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Base styling */
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Custom Utilities for POS */
+@layer utilities {
+
+  /* Minimalist scrollbar for Webkit */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-primary);
+  }
+
+  /* Auto-focus pulsing border effect */
+  .focus-pulse:focus-within {
+    box-shadow: 0 0 0 2px var(--color-primary-container), 0 0 10px rgba(16, 185, 129, 0.2);
+    border-color: var(--color-primary-container);
+  }
+
+  /* Thermal Receipt Styles */
+  .thermal-receipt {
+    background-color: #FFFFFF;
+    color: #000000;
+    padding: 24px;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
+  }
+
+  .border-dashed-thermal {
+    border-top: 1px dashed #000000;
+  }
+}
+
+@page {
+  margin: 0;
+  size: 80mm auto; /* Use auto for height to let the thermal printer cut correctly */
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area, .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 80mm !important;
+    margin: 0;
+    padding: 10px; /* Margin aman mesin print */
+    background-color: white !important;
+    box-shadow: none !important;
+  }
 }
