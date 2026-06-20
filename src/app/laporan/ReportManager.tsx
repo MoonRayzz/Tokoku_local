@@ -27,10 +27,11 @@ type ReportData = {
   hourlySales: number[];
   startDate: string;
   endDate: string;
+  shift: string;
   diffDays: number;
 };
 
-export default function ReportManager({ data }: { data: ReportData }) {
+export default function ReportManager({ data, shifts }: { data: ReportData, shifts: any[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -49,6 +50,13 @@ export default function ReportManager({ data }: { data: ReportData }) {
     router.push(`/laporan?${params.toString()}`);
   };
 
+  const handleShiftFilter = (shiftId: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (shiftId) params.set('shift', shiftId);
+    else params.delete('shift');
+    router.push(`/laporan?${params.toString()}`);
+  };
+
   const handleReset = () => {
     setStartDate(new Date().toISOString().split('T')[0]);
     setEndDate(new Date().toISOString().split('T')[0]);
@@ -59,6 +67,7 @@ export default function ReportManager({ data }: { data: ReportData }) {
     const params = new URLSearchParams();
     if (startDate) params.set('start', startDate);
     if (endDate) params.set('end', endDate);
+    if (data.shift) params.set('shift', data.shift);
     
     window.location.href = `/api/export/laporan?${params.toString()}`;
   };
@@ -121,22 +130,39 @@ export default function ReportManager({ data }: { data: ReportData }) {
         <div className="flex gap-2 items-center flex-wrap">
           {showFilter && (
             <>
+              <div className="flex bg-surface border border-border rounded-lg p-1 mr-2 items-center">
+                <button
+                  onClick={() => handleShiftFilter('')}
+                  className={`px-3 py-1.5 text-xs rounded-md transition-colors ${!data.shift ? 'bg-primary-container text-on-primary-container font-semibold shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
+                >
+                  Semua Shift
+                </button>
+                {shifts.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleShiftFilter(s.id)}
+                    className={`px-3 py-1.5 text-xs rounded-md transition-colors ${data.shift === s.id ? 'bg-primary-container text-on-primary-container font-semibold shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
               <input 
                 type="date" 
-                className="bg-surface border border-border text-text-primary px-3 py-2 rounded focus:outline-none focus:border-primary"
+                className="bg-surface border border-border text-text-primary px-3 py-2 rounded focus:outline-none focus:border-primary h-10"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
               <span className="text-text-secondary"> - </span>
               <input 
                 type="date" 
-                className="bg-surface border border-border text-text-primary px-3 py-2 rounded focus:outline-none focus:border-primary"
+                className="bg-surface border border-border text-text-primary px-3 py-2 rounded focus:outline-none focus:border-primary h-10"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
               <button 
                 onClick={handleFilter}
-                className="bg-surface border border-border hover:border-primary text-text-primary font-label-md text-label-md px-4 py-2 rounded transition-all flex items-center gap-2">
+                className="bg-surface border border-border hover:border-primary text-text-primary font-label-md text-label-md px-4 py-2 rounded transition-all flex items-center gap-2 h-10">
                 <span className="material-symbols-outlined text-[16px]">check</span>
                 Terapkan
               </button>
@@ -165,7 +191,7 @@ export default function ReportManager({ data }: { data: ReportData }) {
             onClick={handleExport}
             className="bg-primary-container hover:bg-primary-fixed-dim text-on-primary-fixed font-label-md text-label-md px-4 py-2 rounded transition-all font-bold flex items-center gap-2">
             <span className="material-symbols-outlined text-[16px]">download</span>
-            Ekspor CSV
+            Ekspor Excel
           </button>
         </div>
       </div>

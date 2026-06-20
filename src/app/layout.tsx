@@ -24,12 +24,20 @@ export default async function RootLayout({
   // Query langsung ke SQLite lokal menggunakan Prisma
   // Memeriksa tabel SyncQueue yang sebelumnya kita buat di schema.prisma
   let pendingSyncCount = 0;
+  let lowStockProducts: any[] = [];
+  let emptyStockProducts: any[] = [];
   try {
     pendingSyncCount = await prisma.syncQueue.count({
       where: { status: 'PENDING' }
     });
+
+    const products = await prisma.product.findMany({
+      select: { id: true, name: true, stock: true, minStockAlert: true }
+    });
+    lowStockProducts = products.filter(p => p.stock > 0 && p.stock <= p.minStockAlert);
+    emptyStockProducts = products.filter(p => p.stock === 0);
   } catch (error) {
-    console.error("Gagal membaca SyncQueue SQLite:", error);
+    console.error("Gagal membaca database lokal SQLite:", error);
   }
 
   return (
@@ -52,7 +60,11 @@ export default async function RootLayout({
             {/* Pembungkus Halaman */}
             <div className="flex-1 flex flex-col ml-sidebar-collapsed h-screen overflow-hidden">
               {/* Topbar diisi angka aktual dari Database lokal */}
-              <TopBar pendingSyncCount={pendingSyncCount} />
+              <TopBar 
+                pendingSyncCount={pendingSyncCount} 
+                lowStockProducts={lowStockProducts}
+                emptyStockProducts={emptyStockProducts}
+              />
               
               {/* Area Konten Utama */}
               <main className="flex-1 mt-16 overflow-y-auto bg-background">

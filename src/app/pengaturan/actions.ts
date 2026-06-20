@@ -1,4 +1,4 @@
-// src/app/pengaturan/actions.ts
+  // src/app/pengaturan/actions.ts
 'use server'
 
 import prisma from '@/lib/db';
@@ -19,6 +19,10 @@ export async function syncToCloud() {
       take: 50
     });
 
+    // Eksekusi PULL SYNC & HEARTBEAT secara konstan, meskipun tidak ada antrean push
+    await pullUpdatesFromCloud();
+    await sendHeartbeat();
+
     if (pendingItems.length === 0) {
       return { success: true, message: 'Semua data sudah tersinkronisasi dengan Cloud.' };
     }
@@ -34,11 +38,10 @@ export async function syncToCloud() {
           // Pisahkan relasi nested — Supabase tidak menerima nested insert
           const { details, member, ...mainTx } = payload;
 
-          // Set memberId ke null agar tidak gagal akibat FK ke tabel Member
           // Ganti nilai null menjadi 0/string kosong untuk payment fields yang tidak support null di Supabase lama
           const txPayload = { 
             ...mainTx, 
-            memberId: null,
+            memberId: mainTx.memberId,
             cashReceived: mainTx.cashReceived ?? 0,
             change: mainTx.change ?? 0,
             approvalCode: mainTx.approvalCode ?? ''
@@ -58,8 +61,13 @@ export async function syncToCloud() {
           }
         } else {
           // Fallback untuk tabel lain (misal jika nanti Anda menambahkan sync Produk/Member)
-          const { error } = await supabase.from(item.tableName).upsert(payload);
-          if (error) throw error;
+          if (item.operation === 'DELETE') {
+            const { error } = await supabase.from(item.tableName).delete().eq('id', payload.id);
+            if (error) throw error;
+          } else {
+            const { error } = await supabase.from(item.tableName).upsert(payload);
+            if (error) throw error;
+          }
         }
 
         // Jika berhasil push ke Supabase, update status di SQLite lokal menjadi SYNCED
@@ -86,7 +94,7 @@ export async function syncToCloud() {
     revalidatePath('/', 'layout');
     
     if (syncedCount === pendingItems.length) {
-      return { success: true, message: `Sukses! ${syncedCount} transaksi berhasil dikirim ke Supabase.` };
+      return { success: true, message: `Sukses! ${syncedCount} item berhasil disinkronkan.` };
     } else {
       return { success: false, error: `Hanya berhasil ${syncedCount} dari ${pendingItems.length}. Cek koneksi internet.` };
     }
@@ -94,5 +102,290 @@ export async function syncToCloud() {
   } catch (error) {
     console.error('Fatal Sync Error:', error);
     return { success: false, error: 'Terjadi kesalahan sistem saat menjalankan sinkronisasi.' };
+  }
+}
+
+export async function pullUpdatesFromCloud() {
+  try {
+    // 1. Pull Products
+    const latestLocalProduct = await prisma.product.findFirst({
+      orderBy: { updatedAt: 'desc' }
+    });
+
+    const lastUpdatedAt = latestLocalProduct ? latestLocalProduct.updatedAt.toISOString() : new Date(0).toISOString();
+
+    const { data: updatedProducts, error } = await supabase
+      .from('Product')
+      .select('*')
+      .gt('updatedAt', lastUpdatedAt);
+
+    if (error) throw error;
+
+    if (updatedProducts && updatedProducts.length > 0) {
+      for (const product of updatedProducts) {
+        await prisma.product.upsert({
+          where: { id: product.id },
+          update: {
+            sku: product.sku,
+            name: product.name,
+            priceRetail: product.priceRetail,
+            priceWholesale: product.priceWholesale,
+            wholesaleMinQty: product.wholesaleMinQty,
+            minStockAlert: product.minStockAlert,
+            updatedAt: new Date(product.updatedAt)
+          },
+          create: {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            priceRetail: product.priceRetail,
+            priceWholesale: product.priceWholesale,
+            wholesaleMinQty: product.wholesaleMinQty,
+            stock: product.stock,
+            minStockAlert: product.minStockAlert,
+            createdAt: new Date(product.createdAt),
+            updatedAt: new Date(product.updatedAt)
+          }
+        });
+      }
+      console.log(`Berhasil pull ${updatedProducts.length} produk dari Cloud.`);
+      revalidatePath('/produk');
+    }
+
+    // 1.5 Pull Members
+    const latestLocalMember = await prisma.member.findFirst({
+      orderBy: { joinedAt: 'desc' }
+    });
+
+    const lastMemberJoinedAt = latestLocalMember ? latestLocalMember.joinedAt.toISOString() : new Date(0).toISOString();
+
+    const { data: updatedMembers, error: memberError } = await supabase
+      .from('Member')
+      .select('*')
+      .gt('joinedAt', lastMemberJoinedAt);
+
+    if (memberError) throw memberError;
+
+    if (updatedMembers && updatedMembers.length > 0) {
+      for (const member of updatedMembers) {
+        await prisma.member.upsert({
+          where: { id: member.id },
+          update: {
+            name: member.name,
+            phone: member.phone,
+            joinedAt: new Date(member.joinedAt)
+          },
+          create: {
+            id: member.id,
+            name: member.name,
+            phone: member.phone,
+            joinedAt: new Date(member.joinedAt)
+          }
+        });
+      }
+      console.log(`Berhasil pull ${updatedMembers.length} member dari Cloud.`);
+      revalidatePath('/member');
+    }
+
+    // 1.6 Pull MemberTiers (Full sync)
+    const { data: remoteTiers, error: tierError } = await supabase.from('MemberTier').select('*');
+    if (tierError) throw tierError;
+    if (remoteTiers) {
+      // Hapus tier lokal yang sudah dihapus di Owner/Cloud
+      const remoteTierIds = remoteTiers.map((t: any) => t.id);
+      await prisma.memberTier.deleteMany({
+        where: { id: { notIn: remoteTierIds } }
+      });
+
+      for (const tier of remoteTiers) {
+        await prisma.memberTier.upsert({
+          where: { id: tier.id },
+          update: {
+            name: tier.name,
+            minTransactions: tier.minTransactions,
+            minTotalSpent: tier.minTotalSpent,
+            minOrderAmount: tier.minOrderAmount,
+            discountPercentage: tier.discountPercentage,
+            maxDiscountAmount: tier.maxDiscountAmount,
+            updatedAt: new Date(tier.updatedAt)
+          },
+          create: {
+            id: tier.id,
+            name: tier.name,
+            minTransactions: tier.minTransactions,
+            minTotalSpent: tier.minTotalSpent,
+            minOrderAmount: tier.minOrderAmount,
+            discountPercentage: tier.discountPercentage,
+            maxDiscountAmount: tier.maxDiscountAmount,
+            createdAt: new Date(tier.createdAt),
+            updatedAt: new Date(tier.updatedAt)
+          }
+        });
+      }
+    }
+
+    // 2. Pull StoreProfile
+    const { data: remoteProfile, error: profileError } = await supabase
+      .from('StoreProfile')
+      .select('*')
+      .eq('id', 'local-store')
+      .single();
+
+    if (!profileError && remoteProfile) {
+      const localProfile = await prisma.storeProfile.findUnique({ where: { id: 'local-store' }});
+      
+      // Jika remote lebih baru atau lokal belum ada
+      if (!localProfile || new Date(remoteProfile.updatedAt) > localProfile.updatedAt) {
+        await prisma.storeProfile.upsert({
+          where: { id: 'local-store' },
+          update: {
+            name: remoteProfile.name,
+            address: remoteProfile.address,
+            phone: remoteProfile.phone,
+            city: remoteProfile.city,
+            footer: remoteProfile.footer,
+            logoUrl: remoteProfile.logoUrl,
+            updatedAt: new Date(remoteProfile.updatedAt)
+          },
+          create: {
+            id: 'local-store',
+            name: remoteProfile.name,
+            address: remoteProfile.address,
+            phone: remoteProfile.phone,
+            city: remoteProfile.city,
+            footer: remoteProfile.footer,
+            logoUrl: remoteProfile.logoUrl,
+            updatedAt: new Date(remoteProfile.updatedAt)
+          }
+        });
+        console.log('Berhasil pull StoreProfile dari Cloud.');
+        revalidatePath('/pengaturan');
+      }
+    }
+
+    // 3. Pull Employee
+    const latestLocalEmployee = await prisma.employee.findFirst({ orderBy: { updatedAt: 'desc' } });
+    const lastEmployeeUpdatedAt = latestLocalEmployee ? latestLocalEmployee.updatedAt.toISOString() : new Date(0).toISOString();
+    const { data: updatedEmployees, error: employeeError } = await supabase.from('Employee').select('*').gt('updatedAt', lastEmployeeUpdatedAt);
+    if (!employeeError && updatedEmployees && updatedEmployees.length > 0) {
+      for (const emp of updatedEmployees) {
+        await prisma.employee.upsert({
+          where: { id: emp.id },
+          update: { name: emp.name, phone: emp.phone, role: emp.role, isActive: emp.isActive, wageBase: emp.wageBase, wageSolo: emp.wageSolo, updatedAt: new Date(emp.updatedAt) },
+          create: { id: emp.id, name: emp.name, phone: emp.phone, role: emp.role, isActive: emp.isActive, wageBase: emp.wageBase, wageSolo: emp.wageSolo, createdAt: new Date(emp.createdAt), updatedAt: new Date(emp.updatedAt) }
+        });
+      }
+      console.log(`Berhasil pull ${updatedEmployees.length} employee dari Cloud.`);
+    }
+
+    // 4. Pull Shift
+    const { data: remoteShifts, error: shiftError } = await supabase.from('Shift').select('*');
+    if (!shiftError && remoteShifts) {
+      const remoteShiftIds = remoteShifts.map((s: any) => s.id);
+      await prisma.shift.deleteMany({ where: { id: { notIn: remoteShiftIds } } });
+      for (const shift of remoteShifts) {
+        await prisma.shift.upsert({
+          where: { id: shift.id },
+          update: { name: shift.name, startTime: shift.startTime, endTime: shift.endTime, isActive: shift.isActive },
+          create: { id: shift.id, name: shift.name, startTime: shift.startTime, endTime: shift.endTime, isActive: shift.isActive, createdAt: new Date(shift.createdAt) }
+        });
+      }
+      console.log(`Berhasil pull ${remoteShifts.length} shift dari Cloud.`);
+    }
+
+    // 5. Pull Attendance (Today only to keep local DB light, or just all that changed recently)
+    // Actually we just need recent ones for cashier check. Pull all that updated recently.
+    const latestLocalAttendance = await prisma.attendance.findFirst({ orderBy: { createdAt: 'desc' } });
+    const lastAttendanceCreatedAt = latestLocalAttendance ? latestLocalAttendance.createdAt.toISOString() : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(); // Last 7 days fallback
+    
+    // For attendance, it doesn't have updatedAt currently. It has createdAt. 
+    // And checkOut updates it... wait! Does Attendance have updatedAt?
+    // Let's check schema. Attendance has no updatedAt? No, it doesn't have updatedAt in SQLite schema!
+    // Fix Timezone Bug: UTC midnight is yesterday in +08:00, so we pull from yesterday
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const { data: todayAttendances, error: attError } = await supabase.from('Attendance').select('*').gte('date', yesterdayStr);
+    if (!attError && todayAttendances) {
+      for (const att of todayAttendances) {
+        await prisma.attendance.upsert({
+          where: { id: att.id },
+          update: { checkIn: att.checkIn ? new Date(att.checkIn) : null, checkOut: att.checkOut ? new Date(att.checkOut) : null, shiftId: att.shiftId, notes: att.notes, hoursWorked: att.hoursWorked, wageUsed: att.wageUsed, totalWage: att.totalWage, isSolo: att.isSolo },
+          create: { id: att.id, employeeId: att.employeeId, shiftId: att.shiftId, date: new Date(att.date), checkIn: att.checkIn ? new Date(att.checkIn) : null, checkOut: att.checkOut ? new Date(att.checkOut) : null, notes: att.notes, hoursWorked: att.hoursWorked, wageUsed: att.wageUsed, totalWage: att.totalWage, isSolo: att.isSolo, createdAt: new Date(att.createdAt) }
+        });
+      }
+      console.log(`Berhasil pull ${todayAttendances.length} attendance hari ini dari Cloud.`);
+    }
+
+    revalidatePath('/');
+
+  } catch (err) {
+    console.error('Pull Sync Error:', err);
+  }
+}
+
+export async function sendHeartbeat() {
+  try {
+    const { error } = await supabase
+      .from('StoreStatus')
+      .upsert({
+        id: 'local-store',
+        lastPing: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      
+    if (error) throw error;
+  } catch (err) {
+    console.error('Failed to send heartbeat:', err);
+  }
+}
+
+export async function getStoreProfile() {
+  const profile = await prisma.storeProfile.findUnique({
+    where: { id: 'local-store' }
+  });
+  return profile;
+}
+
+export async function saveStoreProfile(data: any) {
+  try {
+    const profile = await prisma.storeProfile.upsert({
+      where: { id: 'local-store' },
+      update: {
+        name: data.name,
+        address: data.address,
+        phone: data.phone,
+        city: data.city,
+        footer: data.footer,
+        logoUrl: data.logoUrl || null,
+        updatedAt: new Date()
+      },
+      create: {
+        id: 'local-store',
+        name: data.name,
+        address: data.address,
+        phone: data.phone,
+        city: data.city,
+        footer: data.footer,
+        logoUrl: data.logoUrl || null,
+        updatedAt: new Date()
+      }
+    });
+
+    // Tambahkan ke SyncQueue
+    await prisma.syncQueue.create({
+      data: {
+        tableName: 'StoreProfile',
+        recordId: 'local-store',
+        operation: 'UPSERT',
+        payload: JSON.stringify(profile)
+      }
+    });
+
+    revalidatePath('/pengaturan');
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to save store profile:', err);
+    return { success: false, error: err.message };
   }
 }

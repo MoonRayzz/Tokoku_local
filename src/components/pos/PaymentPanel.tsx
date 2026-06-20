@@ -11,22 +11,28 @@ import { PaymentSuccess } from './PaymentSuccess';
 
 interface PaymentPanelProps {
   total: number;
+  discountAmount?: number;
   items: CartItem[];
   memberId?: string;
   memberName?: string;
   disabled?: boolean;
   onTransactionComplete: (tx: CompletedTransaction) => void;
   onNewTransaction: () => void;
+  cashierName: string;
+  shiftId: string | null;
 }
 
 export function PaymentPanel({
   total,
+  discountAmount,
   items,
   memberId,
   memberName,
   disabled,
   onTransactionComplete,
   onNewTransaction,
+  cashierName,
+  shiftId,
 }: PaymentPanelProps) {
   const handleSuccess = useCallback(
     (tx: CompletedTransaction) => {
@@ -47,9 +53,12 @@ export function PaymentPanel({
     reset,
   } = usePayment({
     total,
+    discountAmount,
     items,
     memberId,
     memberName,
+    cashierName,
+    shiftId,
     onSuccess: handleSuccess,
   });
 

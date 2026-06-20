@@ -1,12 +1,9 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "sqlite"
-  // Baris 'url = env("DATABASE_URL")' dihapus di sini sesuai aturan Prisma 7
 }
 
 model Product {
@@ -36,10 +33,13 @@ model Transaction {
   receiptNumber  String              @unique
   memberId       String?
   totalAmount    Float
-  paymentMethod  String              @default("cash") // 'cash' | 'qris' | 'debit'
-  cashReceived   Float?              // Hanya diisi untuk cash
-  change         Float?              // Hanya diisi untuk cash
-  approvalCode   String?             // Hanya diisi untuk debit (4-8 char, uppercase)
+  discountAmount Float               @default(0)
+  paymentMethod  String              @default("cash")
+  cashReceived   Float?
+  change         Float?
+  approvalCode   String?
+  cashierName    String              @default("Admin")
+  shiftId        String?
   isVoid         Boolean             @default(false)
   createdAt      DateTime            @default(now())
   member         Member?             @relation(fields: [memberId], references: [id])
@@ -57,6 +57,18 @@ model TransactionDetail {
   product       Product     @relation(fields: [productId], references: [id])
 }
 
+model MemberTier {
+  id                 String   @id @default(uuid())
+  name               String   @unique
+  minTransactions    Int      @default(0)
+  minTotalSpent      Float    @default(0)
+  minOrderAmount     Float    @default(0)
+  discountPercentage Float    @default(0)
+  maxDiscountAmount  Float    @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
 model SyncQueue {
   id           String   @id @default(uuid())
   tableName    String
@@ -67,4 +79,64 @@ model SyncQueue {
   errorMessage String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model Employee {
+  id         String       @id @default(uuid())
+  name       String
+  phone      String?
+  role       String       @default("kasir")
+  isActive   Boolean      @default(true)
+  wageBase   Float        @default(0)
+  wageSolo   Float        @default(0)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  Attendance Attendance[]
+}
+
+model Shift {
+  id         String       @id @default(uuid())
+  name       String
+  startTime  String
+  endTime    String
+  isActive   Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  Attendance Attendance[]
+}
+
+model Attendance {
+  id          String    @id @default(uuid())
+  employeeId  String
+  shiftId     String?
+  date        DateTime  @default(now())
+  checkIn     DateTime?
+  checkOut    DateTime?
+  notes       String?
+  hoursWorked Float?
+  wageUsed    Float?
+  totalWage   Float?
+  isSolo      Boolean?  @default(false)
+  createdAt   DateTime  @default(now())
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  shift       Shift?    @relation(fields: [shiftId], references: [id])
+}
+
+model StoreStatus {
+  id        String   @id @default("local-store")
+  lastPing  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StoreProfile {
+  id        String   @id @default("local-store")
+  name      String   @default("TokoKu")
+  address   String   @default("")
+  phone     String   @default("")
+  city      String   @default("")
+  footer    String   @default("Terima kasih telah berbelanja!")
+  logoUrl   String?
+  latitude  Float?
+  longitude Float?
+  radius    Int      @default(50)
+  updatedAt DateTime @updatedAt
 }

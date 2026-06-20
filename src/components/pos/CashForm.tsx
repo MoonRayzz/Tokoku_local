@@ -39,10 +39,34 @@ export function CashForm({ total, isLoading, error, onConfirm }: CashFormProps) 
       setRawInput('');
     } else {
       // Batasi panjang angka agar tidak overflow
-      if (rawInput.length >= 11) return;
-      setRawInput((prev) => prev + val);
+      setRawInput((prev) => (prev.length >= 11 ? prev : prev + val));
     }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT') return;
+
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        handleNumpad(e.key);
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        handleNumpad('DEL');
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (isValid && !isLoading) {
+          onConfirm(cashReceived);
+        }
+      } else if (e.key === 'c' || e.key === 'C' || e.key === 'Escape') {
+        e.preventDefault();
+        handleNumpad('C');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isValid, isLoading, cashReceived, onConfirm]);
 
   const handleQuick = (amount: number) => {
     setRawInput(amount.toString());

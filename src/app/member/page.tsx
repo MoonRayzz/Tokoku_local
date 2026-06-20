@@ -5,21 +5,37 @@ import MemberManager from './MemberManager';
 import { PageTransition } from '@/components/ui/PageTransition';
 
 export default async function MemberPage() {
-  // Query ke SQLite lokal: Mengambil data member DAN menghitung jumlah relasi transaksinya
-  const members = await prisma.member.findMany({
-    include: {
-      _count: {
-        select: { Transaction: true }
-      }
-    },
-    orderBy: {
-      joinedAt: 'desc',
-    },
+  const [members, tiers, txGrouped] = await Promise.all([
+    prisma.member.findMany({
+      orderBy: { joinedAt: 'desc' },
+    }),
+    prisma.memberTier.findMany({
+      orderBy: [
+        { minTransactions: 'desc' },
+        { minTotalSpent: 'desc' }
+      ]
+    }),
+    prisma.transaction.groupBy({
+      by: ['memberId'],
+      _count: { id: true },
+      _sum: { totalAmount: true },
+      where: { memberId: { not: null }, isVoid: false }
+    })
+  ]);
+
+  const memberStats: Record<string, { txCount: number, totalSpent: number }> = {};
+  txGrouped.forEach(group => {
+    if (group.memberId) {
+      memberStats[group.memberId] = {
+        txCount: group._count.id,
+        totalSpent: group._sum.totalAmount || 0
+      };
+    }
   });
 
   return (
     <PageTransition className="h-full">
-      <MemberManager initialMembers={members} />
+      <MemberManager initialMembers={members} tiers={tiers} memberStats={memberStats} />
     </PageTransition>
   );
 }

@@ -16,9 +16,12 @@ interface CheckoutPayload {
     subtotal: number;
   }[];
   totalAmount: number;
+  discountAmount?: number;
   paymentMethod: PaymentMethod;
   cashReceived?: number;   // Wajib jika cash
   approvalCode?: string;   // Wajib jika debit
+  cashierName: string;
+  shiftId: string | null;
 }
 
 const VALID_METHODS: PaymentMethod[] = ['cash', 'qris', 'debit'];
@@ -26,7 +29,7 @@ const APPROVAL_REGEX = /^[A-Z0-9]{4,8}$/;
 
 export async function processCheckout(payload: CheckoutPayload) {
   try {
-    const { totalAmount, paymentMethod, cashReceived, approvalCode, items } = payload;
+    const { totalAmount, discountAmount = 0, paymentMethod, cashReceived, approvalCode, items, cashierName, shiftId } = payload;
 
     // ═══════════════════════════════════════════
     // VALIDASI SERVER-SIDE (tidak percaya client)
@@ -87,10 +90,13 @@ export async function processCheckout(payload: CheckoutPayload) {
           receiptNumber,
           memberId: payload.memberId || null,
           totalAmount,
+          discountAmount,
           paymentMethod,
           cashReceived: finalCashReceived,
           change: finalChange,
           approvalCode: finalApprovalCode,
+          cashierName,
+          shiftId,
           details: {
             create: items.map((item) => ({
               productId: item.productId,
@@ -115,9 +121,20 @@ export async function processCheckout(payload: CheckoutPayload) {
         if (product.stock < item.quantity) {
           throw new Error(`Stok ${product.name} tidak mencukupi (Sisa: ${product.stock}).`);
         }
-        await tx.product.update({
+        const updatedProduct = await tx.product.update({
           where: { id: item.productId },
           data: { stock: { decrement: item.quantity } },
+        });
+
+        // Queue Product update to Cloud
+        await tx.syncQueue.create({
+          data: {
+            tableName: 'Product',
+            recordId: updatedProduct.id,
+            operation: 'UPDATE',
+            payload: JSON.stringify(updatedProduct),
+            status: 'PENDING'
+          }
         });
       }
 
@@ -127,10 +144,13 @@ export async function processCheckout(payload: CheckoutPayload) {
         receiptNumber: transaction.receiptNumber,
         memberId: transaction.memberId,
         totalAmount: transaction.totalAmount,
+        discountAmount: transaction.discountAmount,
         paymentMethod: transaction.paymentMethod,
         cashReceived: transaction.cashReceived,
         change: transaction.change,
         approvalCode: transaction.approvalCode,
+        cashierName: transaction.cashierName,
+        shiftId: transaction.shiftId,
         isVoid: transaction.isVoid,
         createdAt: transaction.createdAt,
         details: transaction.details.map((d) => ({

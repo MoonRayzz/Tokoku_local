@@ -3,9 +3,22 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { getStoreProfile } from '@/app/pengaturan/actions';
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [logoUrl, setLogoUrl] = useState('');
+  const [storeName, setStoreName] = useState('TokoKu POS');
+
+  useEffect(() => {
+    getStoreProfile().then(profile => {
+      if (profile) {
+        if (profile.logoUrl) setLogoUrl(profile.logoUrl);
+        if (profile.name) setStoreName(profile.name);
+      }
+    });
+  }, []);
 
   const navItems = [
     { name: 'Kasir', href: '/', icon: 'point_of_sale' },
@@ -21,13 +34,18 @@ export function Sidebar() {
       
       {/* Brand Header */}
       <div className="h-16 flex items-center px-4 border-b border-border shrink-0">
-        <div className="w-8 h-8 rounded bg-primary-container flex items-center justify-center shrink-0">
-          <span className="material-symbols-outlined text-background font-bold text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
-            storefront
-          </span>
+        <div className="w-8 h-8 rounded bg-primary-container flex items-center justify-center shrink-0 overflow-hidden">
+          {logoUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
+          ) : (
+            <span className="material-symbols-outlined text-background font-bold text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+              storefront
+            </span>
+          )}
         </div>
         <div className="flex flex-col ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-          <span className="text-[18px] font-bold text-primary leading-tight">TokoKu POS</span>
+          <span className="text-[18px] font-bold text-primary leading-tight">{storeName}</span>
           <span className="text-[11px] font-semibold text-text-secondary tracking-wide">Terminal 01</span>
         </div>
       </div>

@@ -25,6 +25,8 @@ type TransactionData = {
   cashReceived: number | null;
   change: number | null;
   approvalCode: string | null;
+  cashierName: string;
+  shiftId: string | null;
   isVoid: boolean;
   member: { name: string; phone: string } | null;
   details: TransactionDetail[];
@@ -32,6 +34,7 @@ type TransactionData = {
 
 interface TransactionManagerProps {
   initialTransactions: TransactionData[];
+  shifts: { id: string; name: string }[];
 }
 
 type MethodFilter = 'all' | 'cash' | 'qris' | 'debit';
@@ -43,7 +46,7 @@ const formatDate = (d: Date) =>
 const formatTime = (d: Date) =>
   new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
-export default function TransactionManager({ initialTransactions }: TransactionManagerProps) {
+export default function TransactionManager({ initialTransactions, shifts }: TransactionManagerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [methodFilter, setMethodFilter] = useState<MethodFilter>('all');
   const [selectedTx, setSelectedTx] = useState<TransactionData | null>(null);
@@ -199,6 +202,7 @@ export default function TransactionManager({ initialTransactions }: TransactionM
               <th className="p-4 text-text-secondary font-medium text-sm">No. Nota</th>
               <th className="p-4 text-text-secondary font-medium text-sm">Waktu</th>
               <th className="p-4 text-text-secondary font-medium text-sm">Pelanggan</th>
+              <th className="p-4 text-text-secondary font-medium text-sm">Kasir (Shift)</th>
               <th className="p-4 text-text-secondary font-medium text-sm text-right">Total</th>
               <th className="p-4 text-text-secondary font-medium text-sm text-center">Metode</th>
               <th className="p-4 text-text-secondary font-medium text-sm">Keterangan</th>
@@ -226,6 +230,12 @@ export default function TransactionManager({ initialTransactions }: TransactionM
                   </td>
                   <td className="p-4 text-text-primary">
                     {tx.member?.name ?? <span className="text-text-secondary italic">Umum</span>}
+                  </td>
+                  <td className="p-4">
+                    <p className="font-semibold text-text-primary">{tx.cashierName}</p>
+                    <p className="text-xs text-text-secondary mt-0.5 font-mono">
+                      {shifts.find(s => s.id === tx.shiftId)?.name || 'Shift'}
+                    </p>
                   </td>
                   <td className="p-4 text-right font-semibold text-text-primary">{formatRp(tx.totalAmount)}</td>
                   <td className="p-4 text-center">

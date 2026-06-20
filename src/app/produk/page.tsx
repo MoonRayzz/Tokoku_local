@@ -9,7 +9,7 @@ export default async function ProdukPage() {
   // Mengambil data dan mengurutkannya berdasarkan produk yang paling baru ditambahkan
   const products = await prisma.product.findMany({
     orderBy: {
-      createdAt: 'desc',
+      stock: 'asc',
     },
   });
 

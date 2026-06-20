@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import * as XLSX from 'xlsx';
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = req.nextUrl;
     const startStr = searchParams.get('start');
     const endStr = searchParams.get('end');
+    const shiftStr = searchParams.get('shift');
 
     let currentStart = new Date();
     currentStart.setHours(0, 0, 0, 0);
@@ -34,7 +36,8 @@ export async function GET(req: NextRequest) {
 
     const transactions = await prisma.transaction.findMany({
       where: {
-        createdAt: { gte: currentStart, lt: currentEnd }
+        createdAt: { gte: currentStart, lt: currentEnd },
+        ...(shiftStr ? { shiftId: shiftStr } : {})
       },
       include: {
         member: true,
@@ -49,48 +52,33 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // Buat Header CSV
-    const headers = [
-      'No. Resi',
-      'Tanggal',
-      'Jam',
-      'Member',
-      'Metode Pembayaran',
-      'Total Amount',
-      'Status',
-      'Item Detail'
-    ];
-
-    const rows = transactions.map(tx => {
+    // Map to array of objects untuk xlsx
+    const data = transactions.map(tx => {
       const date = new Date(tx.createdAt);
-      const tanggal = date.toISOString().split('T')[0];
-      const jam = date.toTimeString().split(' ')[0];
-      const memberName = tx.member ? tx.member.name : '-';
-      const status = tx.isVoid ? 'VOID' : 'BERHASIL';
-      
-      const itemDetail = tx.details.map(d => {
-        return `${d.quantity}x ${d.product.name} (@${d.priceAtTime})`;
-      }).join('; ');
-
-      return [
-        tx.receiptNumber,
-        tanggal,
-        jam,
-        memberName,
-        tx.paymentMethod.toUpperCase(),
-        tx.totalAmount,
-        status,
-        `"${itemDetail}"` // Quote to prevent issues with commas inside the string
-      ].join(',');
+      return {
+        'No. Resi': tx.receiptNumber,
+        'Tanggal': date.toISOString().split('T')[0],
+        'Jam': date.toTimeString().split(' ')[0],
+        'Kasir': tx.cashierName,
+        'Member': tx.member ? tx.member.name : '-',
+        'Metode Pembayaran': tx.paymentMethod.toUpperCase(),
+        'Total Amount': tx.totalAmount,
+        'Status': tx.isVoid ? 'VOID' : 'BERHASIL',
+        'Item Detail': tx.details.map(d => `${d.quantity}x ${d.product.name} (@${d.priceAtTime})`).join('; ')
+      };
     });
 
-    const csvContent = [headers.join(','), ...rows].join('\n');
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Laporan Penjualan');
 
-    return new NextResponse(csvContent, {
+    const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    return new NextResponse(buf, {
       status: 200,
       headers: {
-        'Content-Type': 'text/csv',
-        'Content-Disposition': `attachment; filename="Laporan_Penjualan_${startStr || 'hari_ini'}.csv"`,
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="Laporan_Penjualan_${startStr || 'hari_ini'}.xlsx"`,
       },
     });
 

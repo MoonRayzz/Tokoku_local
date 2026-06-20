@@ -22,12 +22,24 @@ export async function addMember(formData: FormData) {
       return { success: false, error: 'Gagal: Nomor HP ini sudah terdaftar sebagai member.' };
     }
 
-    // Simpan ke SQLite
-    await prisma.member.create({
-      data: {
-        name,
-        phone,
-      }
+    // Simpan ke SQLite dan masukkan ke SyncQueue secara atomik
+    await prisma.$transaction(async (tx) => {
+      const member = await tx.member.create({
+        data: {
+          name,
+          phone,
+        }
+      });
+
+      await tx.syncQueue.create({
+        data: {
+          tableName: 'Member',
+          recordId: member.id,
+          operation: 'INSERT',
+          payload: JSON.stringify(member),
+          status: 'PENDING'
+        }
+      });
     });
 
     revalidatePath('/member');
@@ -41,8 +53,20 @@ export async function addMember(formData: FormData) {
 
 export async function deleteMember(id: string) {
   try {
-    await prisma.member.delete({
-      where: { id }
+    await prisma.$transaction(async (tx) => {
+      await tx.member.delete({
+        where: { id }
+      });
+
+      await tx.syncQueue.create({
+        data: {
+          tableName: 'Member',
+          recordId: id,
+          operation: 'DELETE',
+          payload: JSON.stringify({ id }),
+          status: 'PENDING'
+        }
+      });
     });
     revalidatePath('/member');
     return { success: true };

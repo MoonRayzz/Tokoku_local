@@ -2,7 +2,7 @@
 'use client'
 
 import React, { useState, useEffect, useTransition } from 'react';
-import { syncToCloud } from './actions';
+import { syncToCloud, getStoreProfile, saveStoreProfile } from './actions';
 import { useToast } from '@/components/ui/Toast';
 
 interface SettingsManagerProps {
@@ -14,24 +14,47 @@ export default function SettingsManager({ pendingSyncCount }: SettingsManagerPro
   const [syncStatus, setSyncStatus] = useState<{ type: 'idle' | 'success' | 'error', msg: string }>({ type: 'idle', msg: '' });
   const toast = useToast();
 
-  // State Pengaturan Toko (Disimpan di LocalStorage)
   const [storeConfig, setStoreConfig] = useState({
     name: 'TOKOKU POS LOKAL',
     address: 'Jl. Pendidikan Raya No. 1, Jakarta',
     phone: '08123456789',
-    footer: 'Terima kasih atas kunjungan Anda!\nBarang yang sudah dibeli tidak dapat ditukar.',
-    qrisProvider: 'GoPay Merchant',   // Tampil di struk QRIS
-    edcBank: 'BCA',                   // Tampil di struk Debit
+    city: 'Jakarta',
+    footer: 'Terima kasih atas kunjungan Anda!',
+    logoUrl: '',
+    qrisProvider: 'GoPay Merchant',
+    edcBank: 'BCA',
   });
 
   const [isClient, setIsClient] = useState(false);
+  const [isSavingStore, setIsSavingStore] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
+    // Load config dari LocalStorage untuk payment methods
     const savedConfig = localStorage.getItem('tokoku_config');
+    let loadedPayment = {};
     if (savedConfig) {
-      setStoreConfig(JSON.parse(savedConfig));
+      const parsed = JSON.parse(savedConfig);
+      loadedPayment = { qrisProvider: parsed.qrisProvider || 'GoPay Merchant', edcBank: parsed.edcBank || 'BCA' };
     }
+    
+    // Load Store Profile dari DB
+    getStoreProfile().then(profile => {
+      if (profile) {
+        setStoreConfig(prev => ({
+          ...prev,
+          name: profile.name || '',
+          address: profile.address || '',
+          phone: profile.phone || '',
+          city: profile.city || '',
+          footer: profile.footer || '',
+          logoUrl: profile.logoUrl || '',
+          ...loadedPayment
+        }));
+      } else {
+        setStoreConfig(prev => ({...prev, ...loadedPayment}));
+      }
+    });
   }, []);
 
   const handleConfigChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -39,9 +62,30 @@ export default function SettingsManager({ pendingSyncCount }: SettingsManagerPro
     setStoreConfig(prev => ({ ...prev, [name]: value }));
   };
 
-  const saveConfig = () => {
-    localStorage.setItem('tokoku_config', JSON.stringify(storeConfig));
-    toast.success('Pengaturan toko berhasil disimpan!');
+  const saveConfig = async () => {
+    setIsSavingStore(true);
+    // Simpan parameter lokal ke LocalStorage
+    localStorage.setItem('tokoku_config', JSON.stringify({
+      qrisProvider: storeConfig.qrisProvider,
+      edcBank: storeConfig.edcBank
+    }));
+
+    // Simpan StoreProfile ke DB (dan masuk ke SyncQueue)
+    const result = await saveStoreProfile({
+      name: storeConfig.name,
+      address: storeConfig.address,
+      phone: storeConfig.phone,
+      city: storeConfig.city,
+      footer: storeConfig.footer,
+      logoUrl: storeConfig.logoUrl
+    });
+
+    setIsSavingStore(false);
+    if (result.success) {
+      toast.success('Pengaturan toko berhasil disimpan!');
+    } else {
+      toast.error('Gagal menyimpan profil toko!');
+    }
   };
 
   const handleManualSync = () => {
@@ -56,7 +100,7 @@ export default function SettingsManager({ pendingSyncCount }: SettingsManagerPro
     });
   };
 
-  if (!isClient) return null; // Mencegah hydration mismatch
+  if (!isClient) return null;
 
   return (
     <div className="flex-1 overflow-y-auto p-margin-desktop h-full">
@@ -203,6 +247,14 @@ export default function SettingsManager({ pendingSyncCount }: SettingsManagerPro
                 <input name="phone" value={storeConfig.phone} onChange={handleConfigChange} type="text" className="w-full bg-background border border-border rounded px-3 py-2 text-text-primary font-body-md text-body-md focus:outline-none min-h-[44px]" />
               </div>
               <div className="focus-pulse">
+                <label className="block font-label-md text-label-md text-text-secondary mb-1">Kota</label>
+                <input name="city" value={storeConfig.city} onChange={handleConfigChange} type="text" className="w-full bg-background border border-border rounded px-3 py-2 text-text-primary font-body-md text-body-md focus:outline-none min-h-[44px]" />
+              </div>
+              <div className="focus-pulse">
+                <label className="block font-label-md text-label-md text-text-secondary mb-1">URL Logo (Opsional)</label>
+                <input name="logoUrl" value={storeConfig.logoUrl} onChange={handleConfigChange} type="text" placeholder="https://example.com/logo.png" className="w-full bg-background border border-border rounded px-3 py-2 text-text-primary font-body-md text-body-md focus:outline-none min-h-[44px]" />
+              </div>
+              <div className="focus-pulse">
                 <label className="block font-label-md text-label-md text-text-secondary mb-1">Pesan Penutup (Footer)</label>
                 <textarea name="footer" value={storeConfig.footer} onChange={handleConfigChange} rows={3} className="w-full bg-background border border-border rounded px-3 py-2 text-text-primary font-body-md text-body-md focus:outline-none resize-none"></textarea>
               </div>
@@ -222,9 +274,9 @@ export default function SettingsManager({ pendingSyncCount }: SettingsManagerPro
               </div>
               
               <div className="pt-4 border-t border-border mt-2">
-                <button onClick={saveConfig} className="w-full bg-primary-container text-[#000000] font-headline-sm text-headline-sm font-bold rounded px-4 py-2 min-h-[44px] hover:brightness-110 transition-all flex items-center justify-center gap-2">
+                <button onClick={saveConfig} disabled={isSavingStore} className="w-full bg-primary-container text-[#000000] font-headline-sm text-headline-sm font-bold rounded px-4 py-2 min-h-[44px] hover:brightness-110 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
                   <span className="material-symbols-outlined">save</span>
-                  SIMPAN PENGATURAN
+                  {isSavingStore ? 'MENYIMPAN...' : 'SIMPAN PENGATURAN'}
                 </button>
               </div>
             </div>
@@ -238,8 +290,15 @@ export default function SettingsManager({ pendingSyncCount }: SettingsManagerPro
             <div className="flex-1 flex items-center justify-center bg-background rounded border border-border p-4 overflow-hidden">
               <div className="thermal-receipt w-full max-w-[280px] text-[12px] leading-tight flex flex-col items-center">
                 <div className="text-center mb-2 w-full">
+                  {storeConfig.logoUrl && (
+                    <div className="flex justify-center mb-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={storeConfig.logoUrl} alt="Logo" className="h-8 object-contain mix-blend-multiply grayscale" />
+                    </div>
+                  )}
                   <div className="font-bold text-[16px] mb-1">{storeConfig.name.toUpperCase()}</div>
                   <div className="break-words">{storeConfig.address}</div>
+                  <div>{storeConfig.city}</div>
                   <div>Telp: {storeConfig.phone}</div>
                 </div>
                 <div className="border-dashed-thermal my-2 w-full"></div>

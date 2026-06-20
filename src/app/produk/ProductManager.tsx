@@ -2,7 +2,8 @@
 'use client'
 
 import React, { useState, useTransition, useRef, useEffect } from 'react';
-import { addProduct, deleteProduct, restockProduct } from './actions';
+import * as XLSX from 'xlsx';
+import { addProduct, deleteProduct, restockProduct, importProductsCSV } from './actions';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 
@@ -39,6 +40,7 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
   // Ref untuk mengontrol form dari luar event
   const formRef = useRef<HTMLFormElement>(null);
   const skuInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus ke input SKU saat modal dibuka
   useEffect(() => {
@@ -161,6 +163,69 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
     }
   };
 
+  // Fungsi Download Template Excel (.xlsx)
+  const handleDownloadTemplate = () => {
+    const header = [["SKU", "Nama Produk", "Harga Ecer", "Harga Grosir", "Min Qty Grosir", "Stok Ditambahkan", "Batas Stok Menipis"]];
+    const example1 = ["SKU-001", "Kopi Susu Instan", 5000, 4500, 10, 100, 10];
+    const example2 = ["SKU-002", "Mie Goreng", 3000, null, null, 50, 5];
+    const wsData = XLSX.utils.aoa_to_sheet([...header, example1, example2]);
+
+    const guideData = [
+      ["PANDUAN PENGISIAN TEMPLATE EXCEL"],
+      [""],
+      ["1. Kolom SKU: Wajib diisi. Jika SKU sama dengan produk yang sudah ada, sistem otomatis menambah stok."],
+      ["2. Kolom Nama Produk: Wajib diisi. Hanya akan dipakai jika produk baru (jika SKU baru)."],
+      ["3. Kolom Harga Ecer: Wajib diisi berupa ANGKA SAJA tanpa titik/koma (Contoh: 15000)."],
+      ["4. Kolom Harga Grosir: Opsional (Boleh dikosongkan)."],
+      ["5. Kolom Min Qty Grosir: Opsional (Boleh dikosongkan)."],
+      ["6. Kolom Stok Ditambahkan: Wajib diisi berupa ANGKA SAJA. Angka ini akan DITAMBAHKAN ke stok lama."],
+      ["7. Kolom Batas Stok Menipis: Opsional (Boleh dikosongkan, default: 5)."]
+    ];
+    const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsData, "Data_Produk");
+    XLSX.utils.book_append_sheet(wb, wsGuide, "Panduan_Pengisian");
+
+    wsData["!cols"] = [{wch: 15}, {wch: 30}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 18}, {wch: 18}];
+    wsGuide["!cols"] = [{wch: 100}];
+
+    XLSX.writeFile(wb, 'Template_Import_Produk.xlsx');
+  };
+
+  // Fungsi Import Excel
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const data = event.target?.result;
+      if (data) {
+        try {
+          const wb = XLSX.read(data, { type: 'binary' });
+          const firstSheetName = wb.SheetNames[0];
+          const ws = wb.Sheets[firstSheetName];
+          const csvText = XLSX.utils.sheet_to_csv(ws);
+
+          startTransition(async () => {
+            const result = await importProductsCSV(csvText);
+            if (result.success) {
+              toast.success(`Berhasil mengimpor/memperbarui ${result.count} produk.`);
+            } else {
+              toast.error(result.error || 'Gagal mengimpor produk.');
+            }
+            if (fileInputRef.current) fileInputRef.current.value = '';
+          });
+        } catch (error) {
+          toast.error('Gagal membaca file Excel. Pastikan format file .xlsx sesuai.');
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-margin-desktop h-full">
       
@@ -171,9 +236,32 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
           <p className="font-body-md text-body-md text-text-secondary mt-1">Kelola data master barang & stok toko lokal</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="h-11 px-4 flex items-center gap-2 rounded border border-border bg-surface text-text-primary font-label-md text-label-md hover:bg-surface-container-highest transition-colors">
-            <span className="material-symbols-outlined text-text-secondary text-[18px]">table</span>
-            Import Excel
+          <button 
+            onClick={handleDownloadTemplate}
+            className="h-11 px-4 flex items-center gap-2 rounded border border-border bg-surface text-text-primary font-label-md text-label-md hover:bg-surface-container-highest transition-colors"
+          >
+            <span className="material-symbols-outlined text-text-secondary text-[18px]">download</span>
+            Template Excel
+          </button>
+          
+          <input 
+            type="file" 
+            accept=".xlsx, .xls, .csv" 
+            ref={fileInputRef} 
+            onChange={handleFileUpload} 
+            className="hidden" 
+          />
+          <button 
+            disabled={isPending}
+            onClick={() => fileInputRef.current?.click()}
+            className="h-11 px-4 flex items-center gap-2 rounded border border-border bg-surface text-text-primary font-label-md text-label-md hover:bg-surface-container-highest transition-colors disabled:opacity-50"
+          >
+            {isPending ? (
+              <span className="material-symbols-outlined animate-spin text-text-secondary text-[18px]">progress_activity</span>
+            ) : (
+              <span className="material-symbols-outlined text-text-secondary text-[18px]">upload_file</span>
+            )}
+            {isPending ? 'Mengimpor...' : 'Import Excel'}
           </button>
           <button 
             onClick={() => setIsModalOpen(true)}

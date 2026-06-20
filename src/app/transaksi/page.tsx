@@ -24,9 +24,11 @@ export default async function TransaksiPage() {
     },
   });
 
+  const shifts = await prisma.shift.findMany({ select: { id: true, name: true } });
+
   return (
     <PageTransition className="h-full">
-      <TransactionManager initialTransactions={transactions} />
+      <TransactionManager initialTransactions={transactions} shifts={shifts} />
     </PageTransition>
   );
 }

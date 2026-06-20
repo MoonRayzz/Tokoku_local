@@ -5,22 +5,30 @@ import React, { useState, useTransition, useRef } from 'react';
 import { addMember, deleteMember } from './actions';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 
-// Tipe data yang turun dari Prisma, termasuk jumlah transaksi (Join Table)
-type MemberWithTxCount = {
+type MemberType = {
   id: string;
   name: string;
   phone: string;
   joinedAt: Date;
-  _count: {
-    Transaction: number;
-  };
+};
+
+type MemberTier = {
+  id: string;
+  name: string;
+  minTransactions: number;
+  minTotalSpent: number;
+  minOrderAmount: number;
+  discountPercentage: number;
+  maxDiscountAmount: number;
 };
 
 interface MemberManagerProps {
-  initialMembers: MemberWithTxCount[];
+  initialMembers: MemberType[];
+  tiers: MemberTier[];
+  memberStats: Record<string, { txCount: number, totalSpent: number }>;
 }
 
-export default function MemberManager({ initialMembers }: MemberManagerProps) {
+export default function MemberManager({ initialMembers, tiers, memberStats }: MemberManagerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState('');
@@ -34,16 +42,38 @@ export default function MemberManager({ initialMembers }: MemberManagerProps) {
   );
 
   // Penentuan Status Tier Otomatis berdasarkan jumlah transaksi
-  const getMemberTier = (txCount: number) => {
-    if (txCount >= 20) return { label: 'EMAS', color: 'bg-primary-container text-background' };
-    if (txCount >= 5) return { label: 'PERAK', color: 'bg-warning text-on-surface' };
-    return { label: 'REGULER', color: 'bg-surface-bright text-text-secondary' };
+  const getMemberTier = (memberId: string) => {
+    const stats = memberStats[memberId] || { txCount: 0, totalSpent: 0 };
+    const activeTier = tiers.find((t) => {
+      const meetsTx = t.minTransactions > 0 && stats.txCount >= t.minTransactions;
+      const meetsSpent = t.minTotalSpent > 0 && stats.totalSpent >= t.minTotalSpent;
+      if (t.minTransactions === 0 && t.minTotalSpent === 0) return true;
+      return meetsTx || meetsSpent;
+    }) || (tiers.length > 0 ? tiers[tiers.length - 1] : null);
+
+    if (!activeTier) return { label: 'TANPA LEVEL', color: 'bg-surface-bright text-text-secondary', name: 'Tanpa Level' };
+
+    const colors = [
+      'bg-emerald-500 text-white',
+      'bg-amber-500 text-white',
+      'bg-blue-500 text-white',
+      'bg-purple-500 text-white',
+      'bg-pink-500 text-white',
+    ];
+    const idx = tiers.findIndex(t => t.id === activeTier.id);
+    return { label: activeTier.name.toUpperCase(), color: colors[idx % colors.length], name: activeTier.name };
   };
 
   // Kalkulasi statistik untuk Progress Bar
-  const totalEmas = initialMembers.filter(m => m._count.Transaction >= 20).length;
-  const totalPerak = initialMembers.filter(m => m._count.Transaction >= 5 && m._count.Transaction < 20).length;
-  const totalReguler = initialMembers.filter(m => m._count.Transaction < 5).length;
+  const tierCount: Record<string, number> = {};
+  tiers.forEach(t => tierCount[t.name] = 0);
+  tierCount['Tanpa Level'] = 0;
+  
+  initialMembers.forEach(m => {
+    const tier = getMemberTier(m.id);
+    tierCount[tier.name]++;
+  });
+
   const totalMembers = initialMembers.length || 1; // Hindari pembagian 0
 
   const { confirm } = useConfirm();
@@ -117,14 +147,21 @@ export default function MemberManager({ initialMembers }: MemberManagerProps) {
                   </tr>
                 ) : (
                   filteredMembers.map((member) => {
-                    const tier = getMemberTier(member._count.Transaction);
+                    const tier = getMemberTier(member.id);
                     return (
                       <tr key={member.id} className="border-b border-border hover:bg-surface-container-high transition-colors">
                         <td className="p-4 font-medium text-text-primary">{member.name}</td>
                         <td className="p-4 text-text-secondary">{member.phone}</td>
                         <td className="p-4 text-text-secondary">{new Date(member.joinedAt).toLocaleDateString('id-ID')}</td>
                         <td className="p-4 text-center">
-                          <span className="font-semibold text-text-primary">{member._count.Transaction}</span> x
+                          <div className="flex flex-col items-center">
+                            <span className="font-semibold text-text-primary">
+                              Rp {(memberStats[member.id]?.totalSpent || 0).toLocaleString('id-ID')}
+                            </span>
+                            <span className="text-[10px] text-text-secondary">
+                              ({memberStats[member.id]?.txCount || 0} Trx)
+                            </span>
+                          </div>
                         </td>
                         <td className="p-4">
                           <span className={`px-2 py-1 rounded text-[10px] font-bold tracking-wider ${tier.color}`}>
@@ -190,22 +227,31 @@ export default function MemberManager({ initialMembers }: MemberManagerProps) {
               </div>
               
               <div className="h-2 w-full flex rounded-full overflow-hidden gap-0.5">
-                <div className="h-full bg-primary-container" style={{ width: `${(totalEmas / totalMembers) * 100}%` }} title={`Emas: ${totalEmas}`}></div>
-                <div className="h-full bg-warning" style={{ width: `${(totalPerak / totalMembers) * 100}%` }} title={`Perak: ${totalPerak}`}></div>
-                <div className="h-full bg-surface-bright" style={{ width: `${(totalReguler / totalMembers) * 100}%` }} title={`Reguler: ${totalReguler}`}></div>
+                {Object.keys(tierCount).map((tierName, idx) => {
+                  const count = tierCount[tierName];
+                  if (count === 0) return null;
+                  const colors = ['bg-emerald-500', 'bg-amber-500', 'bg-blue-500', 'bg-purple-500', 'bg-pink-500'];
+                  const bgColor = tierName === 'Tanpa Level' ? 'bg-surface-bright' : colors[idx % colors.length];
+                  return (
+                    <div key={tierName} className={`h-full ${bgColor}`} style={{ width: `${(count / totalMembers) * 100}%` }} title={`${tierName}: ${count}`}></div>
+                  );
+                })}
               </div>
               
-              <div className="flex gap-4 mt-3">
-                <div className="flex items-center gap-1.5 text-[11px] text-text-secondary">
-                  <div className="w-2 h-2 rounded-full bg-primary-container"></div> Emas
-                </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-text-secondary">
-                  <div className="w-2 h-2 rounded-full bg-warning"></div> Perak
-                </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-text-secondary">
-                  <div className="w-2 h-2 rounded-full bg-surface-bright"></div> Reguler
-                </div>
+              <div className="flex flex-wrap gap-4 mt-3">
+                {Object.keys(tierCount).map((tierName, idx) => {
+                  const count = tierCount[tierName];
+                  if (count === 0 && tierName !== 'Tanpa Level') return null;
+                  const colors = ['bg-emerald-500', 'bg-amber-500', 'bg-blue-500', 'bg-purple-500', 'bg-pink-500'];
+                  const bgColor = tierName === 'Tanpa Level' ? 'bg-surface-bright' : colors[idx % colors.length];
+                  return (
+                    <div key={tierName} className="flex items-center gap-1.5 text-[11px] text-text-secondary">
+                      <div className={`w-2 h-2 rounded-full ${bgColor}`}></div> {tierName}
+                    </div>
+                  );
+                })}
               </div>
+
             </div>
           </div>
         </div>

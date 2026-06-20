@@ -17,30 +17,82 @@ type Product = {
   stock: number;
 };
 type Member = { id: string; name: string; phone: string };
+type Employee = { id: string; name: string; role: string; };
+type Shift = { id: string; name: string; startTime: string; endTime: string; };
+
+type MemberTier = {
+  id: string;
+  name: string;
+  minTransactions: number;
+  minTotalSpent: number;
+  minOrderAmount: number;
+  discountPercentage: number;
+  maxDiscountAmount: number;
+};
 
 interface PosClientProps {
   products: Product[];
   members: Member[];
+  tiers: MemberTier[];
+  memberStats: Record<string, { txCount: number, totalSpent: number }>;
+  employees: Employee[];
+  shifts: Shift[];
 }
 
 // Format Rupiah util
 const formatRp = (num: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num);
 
-export default function PosClient({ products, members }: PosClientProps) {
+export default function PosClient({ products, members, tiers, memberStats, employees, shifts }: PosClientProps) {
   const { items, total, addItem, removeItem, updateQuantity, clearCart } = useCartStore();
   const [searchInput, setSearchInput] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [lastTx, setLastTx] = useState<CompletedTransaction | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const memberDropdownRef = useRef<HTMLDivElement>(null);
+  const [memberSearchOpen, setMemberSearchOpen] = useState(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  
+  // Cashier Session State
+  const [activeSession, setActiveSession] = useState<{ cashierName: string, shiftId: string } | null>(null);
+  const [selectedCashierId, setSelectedCashierId] = useState('');
+  const [selectedShiftId, setSelectedShiftId] = useState('');
+
+  // Persist session across tabs
+  useEffect(() => {
+    const saved = localStorage.getItem('pos_session');
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        if (data.expiresAt && Date.now() < data.expiresAt) {
+          setActiveSession({ cashierName: data.cashierName, shiftId: data.shiftId });
+        } else {
+          localStorage.removeItem('pos_session');
+        }
+      } catch (e) {
+        localStorage.removeItem('pos_session');
+      }
+    }
+  }, []);
+
   const toast = useToast();
 
   // Fokus ke scanner setiap kali keranjang berubah
   useEffect(() => {
-    if (lastTx === null) {
+    if (activeSession && lastTx === null && !memberSearchOpen) {
       searchInputRef.current?.focus();
     }
-  }, [items, lastTx]);
+  }, [items, lastTx, memberSearchOpen, activeSession]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (memberDropdownRef.current && !memberDropdownRef.current.contains(event.target as Node)) {
+        setMemberSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Logika Scanner & Pencarian Manual
   const handleScanOrSearch = (e: React.FormEvent) => {
@@ -124,15 +176,176 @@ export default function PosClient({ products, members }: PosClientProps) {
     subtotal: i.subtotal,
   }));
 
+  const handleStartSession = () => {
+    if (!selectedCashierId || !selectedShiftId) {
+      toast.warning("Silakan pilih Kasir dan Shift terlebih dahulu!");
+      return;
+    }
+    const emp = employees.find(e => e.id === selectedCashierId);
+    const shift = shifts.find(s => s.id === selectedShiftId);
+    if (!emp || !shift) return;
+
+    // Hitung expiresAt
+    const now = new Date();
+    const [endH, endM] = shift.endTime.split(':').map(Number);
+    const expiresAt = new Date(now);
+    expiresAt.setHours(endH, endM, 0, 0);
+
+    // Jika endTime sudah lewat hari ini, anggap ini shift malam yang berakhir besok
+    if (expiresAt.getTime() <= now.getTime()) {
+      expiresAt.setDate(expiresAt.getDate() + 1);
+    }
+
+    const sessionData = {
+      cashierId: emp.id,
+      cashierName: emp.name,
+      shiftId: shift.id,
+      shiftName: shift.name,
+      expiresAt: expiresAt.getTime()
+    };
+    
+    localStorage.setItem('pos_session', JSON.stringify(sessionData));
+    setActiveSession({ cashierName: emp.name, shiftId: selectedShiftId });
+    setTimeout(() => searchInputRef.current?.focus(), 100);
+  };
+
+  // Hitung Diskon Member
+  let activeTier: MemberTier | null = null;
+  let discountAmount = 0;
+
+  if (selectedMember) {
+    const stats = memberStats[selectedMember.id] || { txCount: 0, totalSpent: 0 };
+    activeTier = tiers.find((t) => {
+      const meetsTx = t.minTransactions > 0 && stats.txCount >= t.minTransactions;
+      const meetsSpent = t.minTotalSpent > 0 && stats.totalSpent >= t.minTotalSpent;
+      if (t.minTransactions === 0 && t.minTotalSpent === 0) return true;
+      return meetsTx || meetsSpent;
+    }) || (tiers.length > 0 ? tiers[tiers.length - 1] : null);
+
+    if (total > 0 && activeTier && total >= activeTier.minOrderAmount) {
+      const calculatedDiscount = (total * activeTier.discountPercentage) / 100;
+      if (activeTier.maxDiscountAmount > 0 && calculatedDiscount > activeTier.maxDiscountAmount) {
+        discountAmount = activeTier.maxDiscountAmount;
+      } else {
+        discountAmount = calculatedDiscount;
+      }
+    }
+  }
+
+  const getMemberTierUI = (memberId: string) => {
+    const stats = memberStats[memberId] || { txCount: 0, totalSpent: 0 };
+    const tier = tiers.find((t) => {
+      const meetsTx = t.minTransactions > 0 && stats.txCount >= t.minTransactions;
+      const meetsSpent = t.minTotalSpent > 0 && stats.totalSpent >= t.minTotalSpent;
+      if (t.minTransactions === 0 && t.minTotalSpent === 0) return true;
+      return meetsTx || meetsSpent;
+    }) || (tiers.length > 0 ? tiers[tiers.length - 1] : null);
+    
+    if (!tier) return { label: 'TANPA LEVEL', color: 'bg-surface-bright text-text-secondary border-border' };
+
+    const colors = [
+      'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+      'bg-amber-500/15 text-amber-400 border-amber-500/30',
+      'bg-blue-500/15 text-blue-400 border-blue-500/30',
+      'bg-purple-500/15 text-purple-400 border-purple-500/30',
+      'bg-pink-500/15 text-pink-400 border-pink-500/30',
+    ];
+    const idx = tiers.findIndex(t => t.id === tier.id);
+    return { label: tier.name.toUpperCase(), color: colors[idx % colors.length] };
+  };
+
+  const filteredMembers = members.filter(m => 
+    m.name.toLowerCase().includes(memberSearchQuery.toLowerCase()) || 
+    m.phone.includes(memberSearchQuery)
+  );
+
   const isLocked = lastTx !== null;
 
+  const finalTotal = total - discountAmount;
+
   return (
-    <div className="flex flex-col lg:flex-row h-full overflow-hidden p-margin-desktop gap-4">
+    <div className="relative h-full w-full flex flex-col">
+      {!activeSession && (
+        <div className="absolute inset-0 bg-background/90 backdrop-blur-sm z-40 flex items-center justify-center p-4 rounded-tl-2xl">
+          <div className="bg-surface border border-border rounded-xl shadow-2xl p-6 w-full max-w-md flex flex-col gap-5">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-3">
+                <span className="material-symbols-outlined text-3xl">lock_person</span>
+              </div>
+              <h2 className="text-xl font-bold text-text-primary">Mulai Sesi Kasir</h2>
+              <p className="text-sm text-text-secondary mt-1">Silakan pilih nama kasir dan jadwal shift Anda sebelum melayani pelanggan.</p>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2 block">Nama Kasir</label>
+                <select 
+                  value={selectedCashierId} 
+                  onChange={(e) => setSelectedCashierId(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg h-11 px-3 text-text-primary focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none"
+                >
+                  <option value="">-- Pilih Kasir --</option>
+                  {employees.map(e => <option key={e.id} value={e.id}>{e.name} ({e.role})</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2 block">Jadwal Shift</label>
+                <select 
+                  value={selectedShiftId} 
+                  onChange={(e) => setSelectedShiftId(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg h-11 px-3 text-text-primary focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none"
+                >
+                  <option value="">-- Pilih Shift --</option>
+                  {shifts.map(s => <option key={s.id} value={s.id}>{s.name} ({s.startTime} - {s.endTime})</option>)}
+                </select>
+              </div>
+
+              <button 
+                onClick={handleStartSession}
+                className="w-full h-11 bg-primary-container hover:bg-primary text-on-primary-container font-bold rounded-lg transition-colors mt-2"
+              >
+                Buka Kasir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col lg:flex-row h-full overflow-hidden p-margin-desktop gap-4">
 
       {/* ══════════════════════════════
           KIRI: Keranjang Belanja
       ══════════════════════════════ */}
       <div className="flex-1 flex flex-col gap-4 min-w-0">
+
+        {/* Header Session Kasir Aktif */}
+        {activeSession && (
+          <div className="bg-surface border border-border rounded-xl px-4 py-2 shrink-0 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[18px]">person</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider">Kasir Aktif</span>
+                <span className="text-sm font-semibold text-text-primary">
+                  {activeSession.cashierName} <span className="opacity-50 text-xs font-normal">({shifts.find(s => s.id === activeSession.shiftId)?.name || 'Shift'})</span>
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setActiveSession(null);
+                setSelectedCashierId('');
+                setSelectedShiftId('');
+                localStorage.removeItem('pos_session');
+              }}
+              className="px-3 py-1.5 rounded bg-surface-variant hover:bg-surface-bright text-text-secondary hover:text-text-primary text-xs font-medium transition-colors border border-border"
+            >
+              Ganti Kasir
+            </button>
+          </div>
+        )}
 
         {/* Input Barcode Scanner */}
         <form
@@ -164,25 +377,75 @@ export default function PosClient({ products, members }: PosClientProps) {
         </form>
 
         {/* Member Selector */}
-        <div className="bg-surface border border-border rounded-xl px-4 py-3 shrink-0">
-          <label className="text-text-secondary text-xs font-bold uppercase tracking-wider mb-1.5 block">
-            Pelanggan Member
-          </label>
-          <select
-            onChange={(e) =>
-              setSelectedMember(members.find((m) => m.id === e.target.value) || null)
-            }
-            value={selectedMember?.id || ''}
-            disabled={isLocked}
-            className="w-full bg-background border border-border rounded-lg h-10 px-3 text-text-primary focus:border-primary-container text-sm disabled:opacity-50"
-          >
-            <option value="">— Pelanggan Umum —</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} ({m.phone})
-              </option>
-            ))}
-          </select>
+        <div className="bg-surface border border-border rounded-xl px-4 py-3 shrink-0 flex flex-col sm:flex-row gap-4 items-start sm:items-center relative" ref={memberDropdownRef}>
+          <div className="flex-1 w-full relative">
+            <label className="text-text-secondary text-xs font-bold uppercase tracking-wider mb-1.5 block">
+              Pelanggan Member
+            </label>
+            <div 
+              onClick={() => !isLocked && setMemberSearchOpen(!memberSearchOpen)}
+              className={`w-full bg-background border border-border rounded-lg h-10 px-3 flex items-center justify-between cursor-pointer ${isLocked ? 'opacity-50 cursor-not-allowed' : 'hover:border-primary-container'}`}
+            >
+              {selectedMember ? (
+                <span className="text-sm text-text-primary">{selectedMember.name} ({selectedMember.phone})</span>
+              ) : (
+                <span className="text-sm text-text-secondary">— Pelanggan Umum —</span>
+              )}
+              <span className="material-symbols-outlined text-text-secondary text-[18px]">expand_more</span>
+            </div>
+
+            {memberSearchOpen && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-surface-container-high border border-border rounded-lg shadow-xl z-50 overflow-hidden flex flex-col">
+                <div className="p-2 border-b border-border">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Cari nama atau nomor..."
+                    value={memberSearchQuery}
+                    onChange={(e) => setMemberSearchQuery(e.target.value)}
+                    className="w-full bg-background border border-border rounded h-9 px-3 text-sm text-text-primary focus:outline-none focus:border-primary-container"
+                  />
+                </div>
+                <div className="max-h-60 overflow-y-auto">
+                  <div 
+                    onClick={() => { setSelectedMember(null); setMemberSearchOpen(false); setMemberSearchQuery(''); }}
+                    className="px-3 py-2 hover:bg-surface-bright cursor-pointer text-sm text-text-secondary flex items-center gap-2"
+                  >
+                    — Pelanggan Umum —
+                  </div>
+                  {filteredMembers.map(m => {
+                    const tierUI = getMemberTierUI(m.id);
+                    return (
+                      <div 
+                        key={m.id}
+                        onClick={() => { setSelectedMember(m); setMemberSearchOpen(false); setMemberSearchQuery(''); }}
+                        className="px-3 py-2 hover:bg-surface-bright cursor-pointer text-sm flex items-center justify-between border-t border-border/50"
+                      >
+                        <span className="text-text-primary font-medium">{m.name} <span className="text-text-secondary text-xs font-normal ml-1">({m.phone})</span></span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${tierUI.color}`}>
+                          {tierUI.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {filteredMembers.length === 0 && (
+                    <div className="px-3 py-4 text-center text-xs text-text-secondary">Tidak ada member ditemukan.</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          {selectedMember && (
+            <div className={`shrink-0 flex items-center gap-3 px-3 py-2 rounded border w-full sm:w-auto ${getMemberTierUI(selectedMember.id).color}`}>
+              <span className="material-symbols-outlined text-[20px]">workspace_premium</span>
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase tracking-wider opacity-80">Level Member</span>
+                <span className="text-sm font-bold">
+                  {getMemberTierUI(selectedMember.id).label} ({memberStats[selectedMember.id]?.txCount || 0} Trx)
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tabel Keranjang */}
@@ -259,15 +522,39 @@ export default function PosClient({ products, members }: PosClientProps) {
 
           {/* Footer total */}
           {items.length > 0 && (
-            <div className="shrink-0 border-t border-border px-4 py-3 bg-surface-container-low flex justify-between items-center">
-              <span className="text-text-secondary text-sm">
-                {items.reduce((s, i) => s + i.quantity, 0)} item
-              </span>
-              <div className="text-right">
-                <span className="text-text-secondary text-xs mr-2">TOTAL</span>
-                <span className="text-2xl font-bold text-text-primary font-mono">
-                  {formatRp(total)}
+            <div className="shrink-0 border-t border-border px-4 py-3 bg-surface-container-low flex justify-between items-end">
+              <div className="flex flex-col">
+                <span className="text-text-secondary text-sm">
+                  {items.reduce((s, i) => s + i.quantity, 0)} item
                 </span>
+                {discountAmount > 0 && activeTier && (
+                  <span className="text-primary-container text-xs font-bold mt-1 bg-primary-container/10 px-2 py-1 rounded inline-block">
+                    ✓ Diskon {activeTier.name} ({activeTier.discountPercentage}%)
+                  </span>
+                )}
+              </div>
+              
+              <div className="text-right">
+                {discountAmount > 0 ? (
+                  <>
+                    <div className="text-text-secondary text-xs line-through opacity-70 mb-0.5">
+                      {formatRp(total)}
+                    </div>
+                    <div>
+                      <span className="text-text-secondary text-xs mr-2">TOTAL</span>
+                      <span className="text-2xl font-bold text-primary-container font-mono">
+                        {formatRp(finalTotal)}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <span className="text-text-secondary text-xs mr-2">TOTAL</span>
+                    <span className="text-2xl font-bold text-text-primary font-mono">
+                      {formatRp(total)}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -279,14 +566,18 @@ export default function PosClient({ products, members }: PosClientProps) {
       ══════════════════════════════ */}
       <div className="w-full lg:w-[380px] shrink-0 flex flex-col">
         <PaymentPanel
-          total={total}
+          total={finalTotal}
+          discountAmount={discountAmount}
           items={paymentItems}
           memberId={selectedMember?.id}
           memberName={selectedMember?.name}
           disabled={items.length === 0}
           onTransactionComplete={handleTransactionComplete}
           onNewTransaction={handleNewTransaction}
+          cashierName={activeSession?.cashierName || 'Admin'}
+          shiftId={activeSession?.shiftId || null}
         />
+      </div>
       </div>
     </div>
   );

@@ -5,11 +5,14 @@ import ReportManager from './ReportManager';
 import { PageTransition } from '@/components/ui/PageTransition';
 
 type Props = {
-  searchParams: Promise<{ start?: string; end?: string }>;
+  searchParams: Promise<{ start?: string; end?: string; shift?: string }>;
 };
 
 export default async function LaporanPage(props: Props) {
   const params = await props.searchParams;
+  
+  // Ambil daftar shift untuk UI filter
+  const shifts = await prisma.shift.findMany({ where: { isActive: true } });
   
   // 1. Menentukan Batas Waktu berdasarkan filter
   let currentStart = new Date();
@@ -52,6 +55,7 @@ export default async function LaporanPage(props: Props) {
     where: {
       createdAt: { gte: currentStart, lt: currentEnd },
       isVoid: false,
+      ...(params?.shift ? { shiftId: params.shift } : {})
     },
     include: { 
       details: { include: { product: true } } 
@@ -63,6 +67,7 @@ export default async function LaporanPage(props: Props) {
     where: {
       createdAt: { gte: previousStart, lt: previousEnd },
       isVoid: false,
+      ...(params?.shift ? { shiftId: params.shift } : {})
     }
   });
 
@@ -129,12 +134,13 @@ export default async function LaporanPage(props: Props) {
     hourlySales,
     startDate: activeStartDate,
     endDate: activeEndDate,
+    shift: params?.shift || '',
     diffDays
   };
 
   return (
     <PageTransition className="h-full">
-      <ReportManager data={reportData} />
+      <ReportManager data={reportData} shifts={shifts} />
     </PageTransition>
   );
 }

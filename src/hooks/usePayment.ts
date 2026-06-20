@@ -18,18 +18,23 @@ export interface CartItem {
 export interface CompletedTransaction {
   receiptNumber: string;
   totalAmount: number;
+  discountAmount?: number;
   paymentMethod: PaymentMethod;
   cashReceived?: number;
   change?: number;
   approvalCode?: string;
   memberName?: string;
+  cashierName?: string;
 }
 
 interface UsePaymentOptions {
   total: number;
+  discountAmount?: number;
   items: CartItem[];
   memberId?: string;
   memberName?: string;
+  cashierName: string;
+  shiftId: string | null;
   onSuccess: (tx: CompletedTransaction) => void;
 }
 
@@ -47,9 +52,12 @@ interface UsePaymentReturn {
 
 export function usePayment({
   total,
+  discountAmount = 0,
   items,
   memberId,
   memberName,
+  cashierName,
+  shiftId,
   onSuccess,
 }: UsePaymentOptions): UsePaymentReturn {
   const [state, setState] = useState<PaymentState>('idle');
@@ -92,20 +100,25 @@ export function usePayment({
           subtotal: i.subtotal,
         })),
         totalAmount: total,
+        discountAmount,
         paymentMethod,
         cashReceived: extras.cashReceived,
         approvalCode: extras.approvalCode,
+        cashierName,
+        shiftId,
       });
 
       if (result.success && result.receiptNumber) {
         const tx: CompletedTransaction = {
           receiptNumber: result.receiptNumber,
           totalAmount: total,
+          discountAmount,
           paymentMethod,
           cashReceived: extras.cashReceived,
           change: extras.cashReceived != null ? extras.cashReceived - total : undefined,
           approvalCode: extras.approvalCode,
           memberName,
+          cashierName,
         };
         setLastTransaction(tx);
         setState('success');

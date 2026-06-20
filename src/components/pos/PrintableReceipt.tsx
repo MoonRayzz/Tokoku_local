@@ -37,7 +37,7 @@ export function PrintableReceipt({ transaction, items, storeConfig, className = 
       <div className="border-dashed-thermal my-2 w-full"></div>
       
       <div className="flex justify-between mb-1 w-full text-xs">
-        <span>Kasir: Admin</span>
+        <span>Kasir: {transaction.cashierName || 'Admin'}</span>
         <span>{dateStr}</span>
       </div>
       {transaction.receiptNumber && (
@@ -70,7 +70,21 @@ export function PrintableReceipt({ transaction, items, storeConfig, className = 
       ))}
       
       <div className="border-dashed-thermal my-2 w-full"></div>
-      <div className="flex justify-between font-bold text-[14px] w-full">
+      
+      {transaction.discountAmount ? (
+        <>
+          <div className="flex justify-between w-full">
+            <span>Subtotal</span>
+            <span>{formatRp(transaction.totalAmount + transaction.discountAmount)}</span>
+          </div>
+          <div className="flex justify-between w-full mt-1">
+            <span>Diskon Member</span>
+            <span>-{formatRp(transaction.discountAmount)}</span>
+          </div>
+        </>
+      ) : null}
+
+      <div className="flex justify-between font-bold text-[14px] w-full mt-1">
         <span>TOTAL</span>
         <span>{formatRp(transaction.totalAmount)}</span>
       </div>

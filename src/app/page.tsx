@@ -5,21 +5,65 @@ import PosClient from './PosClient';
 import { PageTransition } from '@/components/ui/PageTransition';
 
 export default async function POSPage() {
-  // Ambil semua data secara asinkron dari SQLite
-  // Di sistem POS sesungguhnya, batas pengambilan mungkin diperlukan jika data ribuan,
-  // namun untuk skala lokal, mengambil semuanya memastikan respon scanner 0 milidetik.
-  const [products, members] = await Promise.all([
+  const [products, members, tiers, txGrouped, allEmployees, shifts, activeAttendances] = await Promise.all([
     prisma.product.findMany({
       select: { id: true, sku: true, name: true, priceRetail: true, priceWholesale: true, wholesaleMinQty: true, stock: true }
     }),
     prisma.member.findMany({
       select: { id: true, name: true, phone: true }
+    }),
+    prisma.memberTier.findMany({
+      orderBy: [
+        { minTransactions: 'desc' },
+        { minTotalSpent: 'desc' }
+      ]
+    }),
+    prisma.transaction.groupBy({
+      by: ['memberId'],
+      _count: { id: true },
+      _sum: { totalAmount: true },
+      where: { memberId: { not: null }, isVoid: false }
+    }),
+    prisma.employee.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, role: true }
+    }),
+    prisma.shift.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, startTime: true, endTime: true }
+    }),
+    prisma.attendance.findMany({
+      where: {
+        checkIn: { not: null },
+        checkOut: null
+      },
+      select: { employeeId: true }
     })
   ]);
 
+  const activeEmployeeIds = new Set(activeAttendances.map(a => a.employeeId));
+  const employees = allEmployees.filter(e => activeEmployeeIds.has(e.id));
+
+  const memberStats: Record<string, { txCount: number, totalSpent: number }> = {};
+  txGrouped.forEach(group => {
+    if (group.memberId) {
+      memberStats[group.memberId] = {
+        txCount: group._count.id,
+        totalSpent: group._sum.totalAmount || 0
+      };
+    }
+  });
+
   return (
     <PageTransition className="h-full">
-      <PosClient products={products} members={members} />
+      <PosClient 
+        products={products} 
+        members={members} 
+        tiers={tiers}
+        memberStats={memberStats}
+        employees={employees}
+        shifts={shifts}
+      />
     </PageTransition>
   );
 }
