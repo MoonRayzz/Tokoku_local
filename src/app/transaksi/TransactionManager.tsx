@@ -28,6 +28,7 @@ type TransactionData = {
   cashierName: string;
   shiftId: string | null;
   isVoid: boolean;
+  syncStatus: string;
   member: { name: string; phone: string } | null;
   details: TransactionDetail[];
 };
@@ -253,15 +254,24 @@ export default function TransactionManager({ initialTransactions, shifts }: Tran
                     )}
                   </td>
                   <td className="p-4 text-center">
-                    {tx.isVoid ? (
-                      <span className="px-2 py-1 rounded bg-danger/10 text-danger border border-danger/30 text-[11px] font-bold">
-                        VOID
-                      </span>
-                    ) : (
-                      <span className="px-2 py-1 rounded bg-primary-container/10 text-primary-container border border-primary-container/30 text-[11px] font-bold">
-                        SUKSES
-                      </span>
-                    )}
+                    <div className="flex flex-col items-center gap-1">
+                      {tx.isVoid ? (
+                        <span className="px-2 py-1 rounded bg-danger/10 text-danger border border-danger/30 text-[11px] font-bold">
+                          VOID
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 rounded bg-primary-container/10 text-primary-container border border-primary-container/30 text-[11px] font-bold">
+                          SUKSES
+                        </span>
+                      )}
+                      
+                      {/* Sync Status Indicator */}
+                      {tx.syncStatus === 'SYNCED' ? (
+                        <span className="material-symbols-outlined text-primary-container text-sm mt-1" title="Tersinkronisasi">cloud_done</span>
+                      ) : (
+                        <span className="material-symbols-outlined text-warning text-sm animate-pulse mt-1" title="Menunggu Sync">cloud_upload</span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-4 text-right whitespace-nowrap">
                     <button

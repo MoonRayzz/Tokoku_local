@@ -12,11 +12,13 @@ type Product = {
   id: string;
   sku: string;
   name: string;
+  priceBuy: number | null;
   priceRetail: number;
   priceWholesale: number | null;
   wholesaleMinQty: number | null;
   stock: number;
   minStockAlert: number;
+  syncStatus?: string;
 };
 
 interface ProductManagerProps {
@@ -68,6 +70,7 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
         if (formRef.current) {
           const form = formRef.current;
           (form.elements.namedItem('name') as HTMLInputElement).value = found.name;
+          if (found.priceBuy) (form.elements.namedItem('priceBuy') as HTMLInputElement).value = found.priceBuy.toString();
           (form.elements.namedItem('priceRetail') as HTMLInputElement).value = found.priceRetail.toString();
           (form.elements.namedItem('minStockAlert') as HTMLInputElement).value = found.minStockAlert.toString();
           if (found.priceWholesale) (form.elements.namedItem('priceWholesale') as HTMLInputElement).value = found.priceWholesale.toString();
@@ -119,9 +122,9 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
     
     startTransition(async () => {
       if (existingProduct) {
-        // MODE: RESTOCK PRODUK LAMA
+        // MODE: RESTOCK PRODUK LAMA (Bisa update Harga Beli)
         const addedStock = parseInt(formData.get('stock') as string) || 0;
-        const result = await restockProduct(existingProduct.id, addedStock);
+        const result = await restockProduct(existingProduct.id, addedStock, formData);
         if (result.success) {
           toast.success(`Stok produk "${existingProduct.name}" berhasil ditambah sebanyak ${addedStock} pcs.`);
           setIsModalOpen(false);
@@ -140,6 +143,14 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
         }
       }
     });
+  };
+
+  // Fungsi Edit Produk (Membuka modal dan auto-fill)
+  const handleEditClick = (product: Product) => {
+    setIsModalOpen(true);
+    setTimeout(() => {
+      setSkuInput(product.sku);
+    }, 100);
   };
 
   // Fungsi Hapus Produk
@@ -294,9 +305,11 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
             <tr className="border-b border-border bg-surface-container-low">
               <th className="p-4 font-label-md text-label-md text-text-secondary font-medium tracking-wider">Produk & SKU</th>
               <th className="p-4 font-label-md text-label-md text-text-secondary font-medium tracking-wider w-48">Stok Tersedia</th>
+              <th className="p-4 font-label-md text-label-md text-text-secondary font-medium tracking-wider">Harga Beli / HPP</th>
               <th className="p-4 font-label-md text-label-md text-text-secondary font-medium tracking-wider">Harga Ecer</th>
               <th className="p-4 font-label-md text-label-md text-text-secondary font-medium tracking-wider">Harga Grosir</th>
               <th className="p-4 font-label-md text-label-md text-text-secondary font-medium tracking-wider">Batas Stok Peringatan</th>
+              <th className="p-4 font-label-md text-label-md text-text-secondary font-medium tracking-wider text-center">Status</th>
               <th className="p-4 font-label-md text-label-md text-text-secondary font-medium tracking-wider text-right">Aksi</th>
             </tr>
           </thead>
@@ -338,6 +351,7 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
                         ></div>
                       </div>
                     </td>
+                    <td className="p-4 text-text-primary font-medium">{product.priceBuy ? formatRupiah(product.priceBuy) : '-'}</td>
                     <td className="p-4 text-text-primary font-medium">{formatRupiah(product.priceRetail)}</td>
                     <td className="p-4 text-text-secondary">
                       {product.priceWholesale ? (
@@ -354,7 +368,17 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
                         Menipis jika ≤ {product.minStockAlert}
                       </span>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-center">
+                      {product.syncStatus === 'SYNCED' ? (
+                        <span className="material-symbols-outlined text-primary-container text-sm" title="Tersinkronisasi">cloud_done</span>
+                      ) : (
+                        <span className="material-symbols-outlined text-warning text-sm animate-pulse" title="Menunggu Sync">cloud_upload</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-right flex items-center justify-end">
+                      <button disabled={isPending} onClick={() => handleEditClick(product)} className="p-1.5 text-text-secondary hover:text-primary transition-colors ml-1" title="Edit Produk">
+                        <span className="material-symbols-outlined text-[20px]">edit</span>
+                      </button>
                       <button disabled={isPending} onClick={() => handleDelete(product.id, product.name)} className="p-1.5 text-text-secondary hover:text-danger transition-colors ml-1" title="Hapus Produk">
                         <span className="material-symbols-outlined text-[20px]">delete</span>
                       </button>
@@ -376,9 +400,9 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
             <div className="flex justify-between items-center p-6 border-b border-border">
               <h2 className="font-headline-sm text-headline-sm text-text-primary flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary-container">
-                  {existingProduct ? 'autorenew' : 'inventory_2'}
+                  {existingProduct ? 'edit' : 'inventory_2'}
                 </span>
-                {existingProduct ? 'Restock Produk' : 'Tambah Produk Baru'}
+                {existingProduct ? 'Edit / Restock Produk' : 'Tambah Produk Baru'}
               </h2>
               <button onClick={() => setIsModalOpen(false)} className="text-text-secondary hover:text-text-primary transition-colors">
                 <span className="material-symbols-outlined">close</span>
@@ -410,18 +434,18 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
                     placeholder="Scan barcode di sini..." 
                   />
                   {existingProduct && (
-                    <p className="text-primary text-xs mt-1">✓ Produk ditemukan di database. Beralih ke mode Restock.</p>
+                    <p className="text-primary text-xs mt-1">✓ Produk ditemukan di database. Beralih ke mode Edit / Restock.</p>
                   )}
                 </div>
 
                 <div className="col-span-1 md:col-span-2 focus-pulse">
                   <label className="block text-text-secondary mb-2 font-label-md text-label-md">Nama Produk *</label>
-                  <input name="name" required type="text" readOnly={!!existingProduct} className={`w-full border border-border rounded h-11 px-4 text-text-primary focus:outline-none transition-all ${existingProduct ? 'bg-surface-container opacity-70' : 'bg-background'}`} placeholder="Contoh: Kopi Gayo 200g" />
+                  <input name="name" required type="text" className="w-full border border-border rounded h-11 px-4 text-text-primary focus:outline-none transition-all bg-background focus:border-primary-container" placeholder="Contoh: Kopi Gayo 200g" />
                 </div>
                 
                 <div className="focus-pulse">
                   <label className="block text-text-secondary mb-2 font-label-md text-label-md">Batas Alert Stok Menipis *</label>
-                  <input name="minStockAlert" type="number" defaultValue="5" min="0" required readOnly={!!existingProduct} className={`w-full border border-border rounded h-11 px-4 text-text-primary focus:outline-none transition-all ${existingProduct ? 'bg-surface-container opacity-70' : 'bg-background'}`} />
+                  <input name="minStockAlert" type="number" defaultValue="5" min="0" required className="w-full border border-border rounded h-11 px-4 text-text-primary focus:outline-none transition-all bg-background focus:border-primary-container" />
                 </div>
                 
                 <div className="col-span-1 md:col-span-2 mt-2 pt-6 border-t border-border">
@@ -429,25 +453,30 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
                 </div>
                 
                 <div className="focus-pulse">
+                  <label className="block text-text-secondary mb-2 font-label-md text-label-md">Harga Beli / HPP (Rp)</label>
+                  <input name="priceBuy" type="number" className="w-full border border-border rounded h-11 px-4 text-text-primary focus:outline-none transition-all bg-background" placeholder="Misal: 10000" />
+                </div>
+
+                <div className="focus-pulse">
                   <label className="block text-text-secondary mb-2 font-label-md text-label-md">Harga Ecer (Rp) *</label>
-                  <input name="priceRetail" type="number" required readOnly={!!existingProduct} className={`w-full border border-border rounded h-11 px-4 text-text-primary focus:outline-none transition-all ${existingProduct ? 'bg-surface-container opacity-70' : 'bg-background'}`} placeholder="Misal: 15000" />
+                  <input name="priceRetail" type="number" required className="w-full border border-border rounded h-11 px-4 text-text-primary focus:outline-none transition-all bg-background focus:border-primary-container" placeholder="Misal: 15000" />
                 </div>
                 
                 <div className="focus-pulse">
                   <label className="block text-text-secondary mb-2 font-label-md text-label-md font-bold text-primary">
-                    {existingProduct ? `Tambah Stok Baru (Stok Saat Ini: ${existingProduct.stock} pcs) *` : 'Stok Awal Fisik *'}
+                    {existingProduct ? `Tambah Stok Baru (opsional, isi 0 jika tidak ada) *` : 'Stok Awal Fisik *'}
                   </label>
-                  <input name="stock" type="number" defaultValue="0" min={existingProduct ? "1" : "0"} required className="w-full bg-background border-2 border-primary-container rounded h-11 px-4 text-text-primary focus:outline-none transition-all" />
+                  <input name="stock" type="number" defaultValue="0" min="0" required className="w-full bg-background border-2 border-primary-container rounded h-11 px-4 text-text-primary focus:outline-none transition-all" />
                 </div>
                 
                 <div className="focus-pulse">
                   <label className="block text-text-secondary mb-2 font-label-md text-label-md">Harga Grosir (Opsional)</label>
-                  <input name="priceWholesale" type="number" readOnly={!!existingProduct} className={`w-full border border-border rounded h-11 px-4 text-text-primary focus:outline-none transition-all ${existingProduct ? 'bg-surface-container opacity-70' : 'bg-background'}`} placeholder="Harga untuk pembelian banyak" />
+                  <input name="priceWholesale" type="number" className="w-full border border-border rounded h-11 px-4 text-text-primary focus:outline-none transition-all bg-background focus:border-primary-container" placeholder="Harga untuk pembelian banyak" />
                 </div>
                 
                 <div className="focus-pulse">
                   <label className="block text-text-secondary mb-2 font-label-md text-label-md">Minimal Qty Grosir</label>
-                  <input name="wholesaleMinQty" type="number" defaultValue="0" min="0" readOnly={!!existingProduct} className={`w-full border border-border rounded h-11 px-4 text-text-primary focus:outline-none transition-all ${existingProduct ? 'bg-surface-container opacity-70' : 'bg-background'}`} placeholder="Misal: 12" />
+                  <input name="wholesaleMinQty" type="number" defaultValue="0" min="0" className="w-full border border-border rounded h-11 px-4 text-text-primary focus:outline-none transition-all bg-background focus:border-primary-container" placeholder="Misal: 12" />
                 </div>
               </div>
 

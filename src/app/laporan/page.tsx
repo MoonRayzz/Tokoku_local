@@ -62,6 +62,13 @@ export default async function LaporanPage(props: Props) {
     }
   });
 
+  const currentExpenses = await prisma.expense.findMany({
+    where: {
+      date: { gte: currentStart, lt: currentEnd },
+      ...(params?.shift ? { shiftId: params.shift } : {})
+    }
+  });
+
   // 3. Query Transaksi Sebelumnya (Untuk metrik pertumbuhan %)
   const previousTx = await prisma.transaction.findMany({
     where: {
@@ -75,6 +82,9 @@ export default async function LaporanPage(props: Props) {
   const totalSales = currentTx.reduce((sum, tx) => sum + tx.totalAmount, 0);
   const txCount = currentTx.length;
   const avgOrder = txCount > 0 ? totalSales / txCount : 0;
+  
+  const totalExpense = currentExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const netBalance = totalSales - totalExpense;
 
   const yTotalSales = previousTx.reduce((sum, tx) => sum + tx.totalAmount, 0);
   const yTxCount = previousTx.length;
@@ -128,7 +138,7 @@ export default async function LaporanPage(props: Props) {
 
   // Susun dan bungkus datanya
   const reportData = {
-    today: { totalSales, txCount, avgOrder },
+    today: { totalSales, txCount, avgOrder, totalExpense, netBalance },
     growth: { salesGrowth, txGrowth, avgGrowth },
     topSellers,
     hourlySales,

@@ -76,6 +76,15 @@ export async function syncToCloud() {
           data: { status: 'SYNCED', errorMessage: null }
         });
         
+        // Update status sinkronisasi pada tabel aslinya jika bukan operasi DELETE
+        if (item.operation !== 'DELETE') {
+          try {
+            await prisma.$executeRawUnsafe(`UPDATE "${item.tableName}" SET "syncStatus" = 'SYNCED' WHERE id = ?`, item.recordId);
+          } catch (e) {
+            console.error('Failed to update source table sync status:', e);
+          }
+        }
+        
         syncedCount++;
 
       } catch (error: any) {
@@ -128,6 +137,7 @@ export async function pullUpdatesFromCloud() {
           update: {
             sku: product.sku,
             name: product.name,
+            priceBuy: product.priceBuy,
             priceRetail: product.priceRetail,
             priceWholesale: product.priceWholesale,
             wholesaleMinQty: product.wholesaleMinQty,
@@ -138,6 +148,7 @@ export async function pullUpdatesFromCloud() {
             id: product.id,
             sku: product.sku,
             name: product.name,
+            priceBuy: product.priceBuy,
             priceRetail: product.priceRetail,
             priceWholesale: product.priceWholesale,
             wholesaleMinQty: product.wholesaleMinQty,

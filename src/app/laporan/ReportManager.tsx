@@ -21,7 +21,7 @@ type TopSeller = {
 };
 
 type ReportData = {
-  today: { totalSales: number; txCount: number; avgOrder: number };
+  today: { totalSales: number; txCount: number; avgOrder: number; totalExpense: number; netBalance: number };
   growth: { salesGrowth: number; txGrowth: number; avgGrowth: number };
   topSellers: TopSeller[];
   hourlySales: number[];
@@ -197,26 +197,42 @@ export default function ReportManager({ data, shifts }: { data: ReportData, shif
       </div>
 
       {/* KPIs (Bento Grid Style) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-gutter">
         
-        {/* KPI 1: Daily Sales */}
+        {/* KPI: Total Omzet */}
         <div className="bg-surface border border-border rounded-lg p-6 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <span className="material-symbols-outlined text-primary-container" style={{ fontSize: '64px' }}>payments</span>
           </div>
-          <p className="font-label-md text-label-md text-text-secondary uppercase tracking-wider mb-2">Total Penjualan</p>
+          <p className="font-label-md text-label-md text-text-secondary uppercase tracking-wider mb-2">Total Omzet</p>
           <div className="flex items-baseline gap-2">
-            <span className="font-display-lg text-display-lg text-primary-fixed tracking-tight">{formatRp(data.today.totalSales)}</span>
-          </div>
-          <div className={`mt-4 flex items-center gap-1 text-sm font-medium ${data.growth.salesGrowth >= 0 ? 'text-primary' : 'text-danger'}`}>
-            <span className="material-symbols-outlined text-[16px]">
-              {data.growth.salesGrowth >= 0 ? 'trending_up' : 'trending_down'}
-            </span>
-            <span>{formatGrowth(data.growth.salesGrowth)}</span>
+            <span className="font-display-lg text-display-lg text-text-primary tracking-tight">{formatRp(data.today.totalSales)}</span>
           </div>
         </div>
 
-        {/* KPI 2: Transaction Count */}
+        {/* KPI: Pengeluaran Hari Ini */}
+        <div className="bg-surface border border-border rounded-lg p-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <span className="material-symbols-outlined text-error" style={{ fontSize: '64px' }}>account_balance_wallet</span>
+          </div>
+          <p className="font-label-md text-label-md text-text-secondary uppercase tracking-wider mb-2">Total Pengeluaran</p>
+          <div className="flex items-baseline gap-2">
+            <span className="font-display-lg text-display-lg text-error tracking-tight">{formatRp(data.today.totalExpense)}</span>
+          </div>
+        </div>
+
+        {/* KPI: Saldo Bersih */}
+        <div className="bg-surface border border-border rounded-lg p-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <span className="material-symbols-outlined text-primary" style={{ fontSize: '64px' }}>account_balance</span>
+          </div>
+          <p className="font-label-md text-label-md text-text-secondary uppercase tracking-wider mb-2">Saldo Bersih Shift</p>
+          <div className="flex items-baseline gap-2">
+            <span className="font-display-lg text-display-lg text-primary-fixed tracking-tight">{formatRp(data.today.netBalance)}</span>
+          </div>
+        </div>
+
+        {/* KPI: Jumlah Transaksi */}
         <div className="bg-surface border border-border rounded-lg p-6 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <span className="material-symbols-outlined text-secondary" style={{ fontSize: '64px' }}>receipt_long</span>
@@ -233,7 +249,7 @@ export default function ReportManager({ data, shifts }: { data: ReportData, shif
           </div>
         </div>
 
-        {/* KPI 3: Average Order Value */}
+        {/* KPI: Average Order Value */}
         <div className="bg-surface border border-border rounded-lg p-6 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <span className="material-symbols-outlined text-tertiary" style={{ fontSize: '64px' }}>shopping_basket</span>

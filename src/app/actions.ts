@@ -83,6 +83,11 @@ export async function processCheckout(payload: CheckoutPayload) {
     const receiptNumber = `TRX-${dateString}-${timeString}`;
 
     const result = await prisma.$transaction(async (tx) => {
+      // Ambil data produk terbaru untuk mendapatkan harga beli (HPP)
+      const productsData = await tx.product.findMany({
+        where: { id: { in: items.map(i => i.productId) } }
+      });
+      const productMap = new Map(productsData.map(p => [p.id, p]));
 
       // A. Simpan Header Transaksi dengan semua field payment
       const transaction = await tx.transaction.create({
@@ -98,12 +103,16 @@ export async function processCheckout(payload: CheckoutPayload) {
           cashierName,
           shiftId,
           details: {
-            create: items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              priceAtTime: item.priceAtTime,
-              subtotal: item.subtotal,
-            })),
+            create: items.map((item) => {
+              const pData = productMap.get(item.productId);
+              return {
+                productId: item.productId,
+                quantity: item.quantity,
+                priceBuyAtTime: pData?.priceBuy || 0, // Fallback ke 0 jika tidak ada
+                priceAtTime: item.priceAtTime,
+                subtotal: item.subtotal,
+              };
+            }),
           },
         },
         include: {
@@ -158,6 +167,7 @@ export async function processCheckout(payload: CheckoutPayload) {
           transactionId: d.transactionId,
           productId: d.productId,
           quantity: d.quantity,
+          priceBuyAtTime: d.priceBuyAtTime,
           priceAtTime: d.priceAtTime,
           subtotal: d.subtotal,
         })),

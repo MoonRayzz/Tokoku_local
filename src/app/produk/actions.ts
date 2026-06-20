@@ -8,6 +8,8 @@ export async function addProduct(formData: FormData) {
   try {
     const name = formData.get('name') as string;
     let sku = formData.get('sku') as string;
+    const priceBuyStr = formData.get('priceBuy') as string;
+    const priceBuy = priceBuyStr ? parseFloat(priceBuyStr) : null;
     const priceRetail = parseFloat(formData.get('priceRetail') as string);
     const stock = parseInt(formData.get('stock') as string) || 0;
     const priceWholesale = parseFloat(formData.get('priceWholesale') as string) || null;
@@ -39,6 +41,7 @@ export async function addProduct(formData: FormData) {
         data: {
           name,
           sku,
+          priceBuy,
           priceRetail,
           stock,
           priceWholesale,
@@ -68,16 +71,34 @@ export async function addProduct(formData: FormData) {
   }
 }
 
-export async function restockProduct(id: string, additionalStock: number) {
+export async function restockProduct(id: string, additionalStock: number, formData?: FormData) {
   try {
-    if (additionalStock <= 0) {
-      return { success: false, error: 'Jumlah stok tambahan harus lebih dari 0.' };
+    if (additionalStock < 0) {
+      return { success: false, error: 'Jumlah stok tambahan tidak valid.' };
     }
 
     await prisma.$transaction(async (tx) => {
+      const dataToUpdate: any = { stock: { increment: additionalStock } };
+      
+      if (formData) {
+        const name = formData.get('name') as string;
+        const priceBuyStr = formData.get('priceBuy') as string;
+        const priceRetail = formData.get('priceRetail') as string;
+        const minStockAlert = formData.get('minStockAlert') as string;
+        const priceWholesale = formData.get('priceWholesale') as string;
+        const wholesaleMinQty = formData.get('wholesaleMinQty') as string;
+
+        if (name) dataToUpdate.name = name;
+        dataToUpdate.priceBuy = priceBuyStr ? parseFloat(priceBuyStr) : null;
+        if (priceRetail) dataToUpdate.priceRetail = parseFloat(priceRetail);
+        if (minStockAlert) dataToUpdate.minStockAlert = parseInt(minStockAlert);
+        dataToUpdate.priceWholesale = priceWholesale ? parseFloat(priceWholesale) : null;
+        dataToUpdate.wholesaleMinQty = wholesaleMinQty ? parseInt(wholesaleMinQty) : null;
+      }
+
       const updatedProduct = await tx.product.update({
         where: { id },
-        data: { stock: { increment: additionalStock } }
+        data: dataToUpdate
       });
 
       await tx.syncQueue.create({

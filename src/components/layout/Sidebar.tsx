@@ -24,6 +24,7 @@ export function Sidebar() {
     { name: 'Kasir', href: '/', icon: 'point_of_sale' },
     { name: 'Produk', href: '/produk', icon: 'inventory_2' },
     { name: 'Transaksi', href: '/transaksi', icon: 'receipt_long' },
+    { name: 'Pengeluaran', href: '/pengeluaran', icon: 'account_balance_wallet' },
     { name: 'Member', href: '/member', icon: 'group' },
     { name: 'Laporan', href: '/laporan', icon: 'analytics' },
     { name: 'Pengaturan', href: '/pengaturan', icon: 'settings' },
