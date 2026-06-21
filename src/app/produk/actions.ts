@@ -245,13 +245,15 @@ export async function importProductsCSV(csvData: string) {
 
         const sku = getCol(0);
         const name = getCol(1);
-        const priceRetail = parseFloat(getCol(2)) || 0;
-        const priceWholesaleStr = getCol(3);
-        const wholesaleMinQtyStr = getCol(4);
+        const hargaBeliStr = getCol(2);
+        const hargaBeli = hargaBeliStr ? parseFloat(hargaBeliStr) : null;
+        const priceRetail = parseFloat(getCol(3)) || 0;
+        const priceWholesaleStr = getCol(4);
+        const wholesaleMinQtyStr = getCol(5);
         const priceWholesale = priceWholesaleStr ? parseFloat(priceWholesaleStr) : null;
         const wholesaleMinQty = wholesaleMinQtyStr ? parseInt(wholesaleMinQtyStr) : null;
-        const addedStock = parseInt(getCol(5)) || 0;
-        const minStockAlertStr = getCol(6);
+        const addedStock = parseInt(getCol(6)) || 0;
+        const minStockAlertStr = getCol(7);
         const minStockAlert = minStockAlertStr ? parseInt(minStockAlertStr) : 5;
 
         if (!sku || !name || priceRetail <= 0) continue; // skip invalid rows
@@ -264,6 +266,7 @@ export async function importProductsCSV(csvData: string) {
             where: { id: existing.id },
             data: {
               name,
+              hargaBeli,
               priceRetail,
               priceWholesale,
               wholesaleMinQty,
@@ -286,6 +289,7 @@ export async function importProductsCSV(csvData: string) {
             data: {
               sku,
               name,
+              hargaBeli,
               priceRetail,
               priceWholesale,
               wholesaleMinQty,

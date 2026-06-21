@@ -128,6 +128,8 @@ export default function TransactionManager({
     name: storeProfile?.name || 'TOKOKU POS LOKAL',
     address: storeProfile?.address || 'Jl. Pendidikan Raya No. 1, Jakarta',
     phone: storeProfile?.phone || '08123456789',
+    city: storeProfile?.city || 'Jakarta',
+    logoUrl: storeProfile?.logoUrl || '',
     footer: storeProfile?.footer || 'Terima kasih atas kunjungan Anda!\nBarang yang sudah dibeli tidak dapat ditukar.',
     qrisProvider: 'GoPay Merchant',
     edcBank: 'BCA',

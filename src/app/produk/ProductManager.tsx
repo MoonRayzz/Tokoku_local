@@ -207,9 +207,9 @@ export default function ProductManager({ initialProducts, totalPages, totalCount
 
   // Fungsi Download Template Excel (.xlsx)
   const handleDownloadTemplate = () => {
-    const header = [["SKU", "Nama Produk", "Harga Ecer", "Harga Grosir", "Min Qty Grosir", "Stok Ditambahkan", "Batas Stok Menipis"]];
-    const example1 = ["SKU-001", "Kopi Susu Instan", 5000, 4500, 10, 100, 10];
-    const example2 = ["SKU-002", "Mie Goreng", 3000, null, null, 50, 5];
+    const header = [["SKU", "Nama Produk", "Harga Beli (HPP)", "Harga Ecer", "Harga Grosir", "Min Qty Grosir", "Stok Ditambahkan", "Batas Stok Menipis"]];
+    const example1 = ["SKU-001", "Kopi Susu Instan", 3500, 5000, 4500, 10, 100, 10];
+    const example2 = ["SKU-002", "Mie Goreng", 2500, 3000, null, null, 50, 5];
     const wsData = XLSX.utils.aoa_to_sheet([...header, example1, example2]);
 
     const guideData = [
@@ -217,11 +217,12 @@ export default function ProductManager({ initialProducts, totalPages, totalCount
       [""],
       ["1. Kolom SKU: Wajib diisi. Jika SKU sama dengan produk yang sudah ada, sistem otomatis menambah stok."],
       ["2. Kolom Nama Produk: Wajib diisi. Hanya akan dipakai jika produk baru (jika SKU baru)."],
-      ["3. Kolom Harga Ecer: Wajib diisi berupa ANGKA SAJA tanpa titik/koma (Contoh: 15000)."],
-      ["4. Kolom Harga Grosir: Opsional (Boleh dikosongkan)."],
-      ["5. Kolom Min Qty Grosir: Opsional (Boleh dikosongkan)."],
-      ["6. Kolom Stok Ditambahkan: Wajib diisi berupa ANGKA SAJA. Angka ini akan DITAMBAHKAN ke stok lama."],
-      ["7. Kolom Batas Stok Menipis: Opsional (Boleh dikosongkan, default: 5)."]
+      ["3. Kolom Harga Beli (HPP): Opsional (Boleh dikosongkan), diisi angka saja (Contoh: 3500)."],
+      ["4. Kolom Harga Ecer: Wajib diisi berupa ANGKA SAJA tanpa titik/koma (Contoh: 15000)."],
+      ["5. Kolom Harga Grosir: Opsional (Boleh dikosongkan)."],
+      ["6. Kolom Min Qty Grosir: Opsional (Boleh dikosongkan)."],
+      ["7. Kolom Stok Ditambahkan: Wajib diisi berupa ANGKA SAJA. Angka ini akan DITAMBAHKAN ke stok lama."],
+      ["8. Kolom Batas Stok Menipis: Opsional (Boleh dikosongkan, default: 5)."]
     ];
     const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
 
@@ -229,7 +230,7 @@ export default function ProductManager({ initialProducts, totalPages, totalCount
     XLSX.utils.book_append_sheet(wb, wsData, "Data_Produk");
     XLSX.utils.book_append_sheet(wb, wsGuide, "Panduan_Pengisian");
 
-    wsData["!cols"] = [{wch: 15}, {wch: 30}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 18}, {wch: 18}];
+    wsData["!cols"] = [{wch: 15}, {wch: 30}, {wch: 18}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 18}, {wch: 18}];
     wsGuide["!cols"] = [{wch: 100}];
 
     XLSX.writeFile(wb, 'Template_Import_Produk.xlsx');
