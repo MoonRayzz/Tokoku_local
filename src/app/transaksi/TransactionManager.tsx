@@ -28,6 +28,7 @@ type TransactionData = {
   approvalCode: string | null;
   cashierName: string;
   shiftId: string | null;
+  discountAmount: number;
   isVoid: boolean;
   syncStatus: string;
   member: { name: string; phone: string } | null;
@@ -37,6 +38,7 @@ type TransactionData = {
 interface TransactionManagerProps {
   initialTransactions: TransactionData[];
   shifts: { id: string; name: string }[];
+  storeProfile?: any;
 }
 
 type MethodFilter = 'all' | 'cash' | 'qris' | 'debit';
@@ -48,7 +50,7 @@ const formatDate = (d: Date) =>
 const formatTime = (d: Date) =>
   new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
-export default function TransactionManager({ initialTransactions, shifts }: TransactionManagerProps) {
+export default function TransactionManager({ initialTransactions, shifts, storeProfile }: TransactionManagerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [methodFilter, setMethodFilter] = useState<MethodFilter>('all');
   const [selectedTx, setSelectedTx] = useState<TransactionData | null>(null);
@@ -62,10 +64,10 @@ export default function TransactionManager({ initialTransactions, shifts }: Tran
   const { triggerSync } = useSync();
 
   const [storeConfig, setStoreConfig] = React.useState({
-    name: 'TOKOKU POS LOKAL',
-    address: 'Jl. Pendidikan Raya No. 1, Jakarta',
-    phone: '08123456789',
-    footer: 'Terima kasih atas kunjungan Anda!\nBarang yang sudah dibeli tidak dapat ditukar.',
+    name: storeProfile?.name || 'TOKOKU POS LOKAL',
+    address: storeProfile?.address || 'Jl. Pendidikan Raya No. 1, Jakarta',
+    phone: storeProfile?.phone || '08123456789',
+    footer: storeProfile?.footer || 'Terima kasih atas kunjungan Anda!\nBarang yang sudah dibeli tidak dapat ditukar.',
     qrisProvider: 'GoPay Merchant',
     edcBank: 'BCA',
   });
@@ -73,7 +75,14 @@ export default function TransactionManager({ initialTransactions, shifts }: Tran
   React.useEffect(() => {
     const saved = localStorage.getItem('tokoku_config');
     if (saved) {
-      try { setStoreConfig(JSON.parse(saved)); } catch { }
+      try {
+        const parsed = JSON.parse(saved);
+        setStoreConfig(prev => ({
+          ...prev,
+          qrisProvider: parsed.qrisProvider || prev.qrisProvider,
+          edcBank: parsed.edcBank || prev.edcBank
+        }));
+      } catch { }
     }
   }, []);
 
@@ -111,7 +120,7 @@ export default function TransactionManager({ initialTransactions, shifts }: Tran
       const currentCashier = localStorage.getItem('tokoku_cashier_name') || 'Admin';
       const result = await voidTransaction(selectedTx.id, pin, voidReason, voidNotes, currentCashier);
       if (result.success) {
-        toast.show('Berhasil', 'Transaksi telah dibatalkan', 'success');
+        toast.success('Transaksi telah dibatalkan');
         setVoidModalOpen(false);
         triggerSync(); // Panggil event-based sync (5s debounce)
         setPin('');
@@ -314,7 +323,7 @@ export default function TransactionManager({ initialTransactions, shifts }: Tran
           <div className="relative print-area bg-white p-4 max-h-[90vh] overflow-y-auto rounded shadow-2xl flex flex-col font-mono text-sm leading-tight print:max-h-none print:overflow-visible print:shadow-none print:mx-auto">
             
             <PrintableReceipt 
-              transaction={selectedTx} 
+              transaction={{ ...selectedTx, memberName: selectedTx.member?.name }} 
               items={selectedTx.details.map(d => ({
                 name: d.product.name,
                 price: d.priceAtTime,

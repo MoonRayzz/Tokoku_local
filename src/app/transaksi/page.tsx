@@ -26,6 +26,10 @@ export default async function TransaksiPage() {
 
   const shifts = await prisma.shift.findMany({ select: { id: true, name: true } });
 
+  const storeProfile = await prisma.storeProfile.findUnique({
+    where: { id: 'local-store' }
+  });
+
   // Cari status sinkronisasi untuk transaksi dari SyncQueue
   const syncQueues = await prisma.syncQueue.findMany({
     where: {
@@ -47,7 +51,7 @@ export default async function TransaksiPage() {
 
   return (
     <PageTransition className="h-full">
-      <TransactionManager initialTransactions={transactionsWithSyncStatus} shifts={shifts} />
+      <TransactionManager initialTransactions={transactionsWithSyncStatus} shifts={shifts} storeProfile={storeProfile} />
     </PageTransition>
   );
 }

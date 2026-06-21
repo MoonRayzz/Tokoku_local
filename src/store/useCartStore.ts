@@ -15,7 +15,7 @@ interface CartState {
   total: number;
   addItem: (item: Omit<CartItem, 'id' | 'subtotal'>) => void;
   removeItem: (id: string) => void;
-  updateQuantity: (id: string, quantity: number) => void;
+  updateQuantity: (id: string, quantity: number, newPrice?: number) => void;
   clearCart: () => void;
 }
 
@@ -62,12 +62,14 @@ export const useCartStore = create<CartState>((set) => ({
   }),
 
   // Fungsi untuk mengubah kuantitas secara manual (misal diketik oleh kasir)
-  updateQuantity: (id, quantity) => set((state) => {
-    const newItems = state.items.map((i) => 
-      i.id === id 
-        ? { ...i, quantity, subtotal: quantity * i.price }
-        : i
-    );
+  updateQuantity: (id, quantity, newPrice) => set((state) => {
+    const newItems = state.items.map((i) => {
+      if (i.id === id) {
+        const priceToUse = newPrice !== undefined ? newPrice : i.price;
+        return { ...i, quantity, price: priceToUse, subtotal: quantity * priceToUse };
+      }
+      return i;
+    });
     return {
       items: newItems,
       total: newItems.reduce((sum, item) => sum + item.subtotal, 0)

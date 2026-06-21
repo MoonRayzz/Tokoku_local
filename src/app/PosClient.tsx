@@ -126,11 +126,15 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
         newQty >= foundProduct.wholesaleMinQty
       ) {
         finalPrice = foundProduct.priceWholesale;
-        const existingItem = items.find((i) => i.productId === foundProduct.id);
-        if (existingItem) updateQuantity(existingItem.id, newQty);
       }
 
-      addItem({ productId: foundProduct.id, name: foundProduct.name, price: finalPrice, quantity: 1 });
+      const existingItem = items.find((i) => i.productId === foundProduct.id);
+      if (existingItem) {
+        updateQuantity(existingItem.id, newQty, finalPrice);
+      } else {
+        addItem({ productId: foundProduct.id, name: foundProduct.name, price: finalPrice, quantity: 1 });
+      }
+      
       setSearchInput('');
     } else {
       toast.warning(`Produk "${searchInput}" tidak ditemukan.`);
@@ -154,21 +158,32 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
     setTimeout(() => searchInputRef.current?.focus(), 100);
   };
 
-  // Wrapper untuk updateQuantity agar memvalidasi stok
+  // Wrapper untuk updateQuantity agar memvalidasi stok dan harga grosir
   const handleUpdateQuantity = (cartItemId: string, newQty: number) => {
     const item = items.find((i) => i.id === cartItemId);
     if (!item) return;
     
+    const product = products.find((p) => p.id === item.productId);
+    
     // Jika menambah quantity, pastikan stok cukup
     if (newQty > item.quantity) {
-      const product = products.find((p) => p.id === item.productId);
       if (product && product.stock < newQty) {
-        toast.error(`Stok ${product.name} tidak mencukupi (Sisa: ${product.stock})`);
+        toast.error(`Stok ${product?.name || item.name} tidak mencukupi (Sisa: ${product?.stock || 0})`);
         return;
       }
     }
     
-    updateQuantity(cartItemId, newQty);
+    // Hitung ulang harga jika ada aturan harga grosir
+    let newPrice = item.price;
+    if (product) {
+      if (product.priceWholesale && product.wholesaleMinQty && newQty >= product.wholesaleMinQty) {
+        newPrice = product.priceWholesale;
+      } else {
+        newPrice = product.priceRetail;
+      }
+    }
+    
+    updateQuantity(cartItemId, newQty, newPrice);
   };
 
   // Konversi CartItem dari store ke format yang dipahami PaymentPanel
@@ -476,13 +491,26 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
                     </td>
                   </tr>
                 ) : (
-                  items.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="border-b border-border/50 hover:bg-surface-container-high"
-                    >
-                      <td className="py-3 px-4 font-medium text-text-primary">{item.name}</td>
-                      <td className="py-3 px-4 text-center">
+                  items.map((item) => {
+                    const product = products.find(p => p.id === item.productId);
+                    const isWholesale = product && product.priceWholesale && product.wholesaleMinQty && item.quantity >= product.wholesaleMinQty;
+                    
+                    return (
+                      <tr
+                        key={item.id}
+                        className="border-b border-border/50 hover:bg-surface-container-high"
+                      >
+                        <td className="py-3 px-4 font-medium text-text-primary">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate">{item.name}</span>
+                            {isWholesale && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-success/20 text-success border border-success/30 uppercase tracking-wider">
+                                Grosir
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
                         <div className="flex items-center justify-center gap-1">
                           {!isLocked && (
                             <button
@@ -518,8 +546,9 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
                         )}
                       </td>
                     </tr>
-                  ))
-                )}
+                  );
+                })
+              )}
               </tbody>
             </table>
           </div>
