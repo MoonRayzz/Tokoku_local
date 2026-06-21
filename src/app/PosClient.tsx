@@ -5,6 +5,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useCartStore } from '@/store/useCartStore';
 import { PaymentPanel } from '@/components/pos/PaymentPanel';
 import { useToast } from '@/components/ui/Toast';
+import { useSync } from '@/context/SyncContext';
 import type { CompletedTransaction, CartItem } from '@/hooks/usePayment';
 
 type Product = {
@@ -37,13 +38,14 @@ interface PosClientProps {
   memberStats: Record<string, { txCount: number, totalSpent: number }>;
   employees: Employee[];
   shifts: Shift[];
+  storeProfile: any;
 }
 
 // Format Rupiah util
 const formatRp = (num: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num);
 
-export default function PosClient({ products, members, tiers, memberStats, employees, shifts }: PosClientProps) {
+export default function PosClient({ products, members, tiers, memberStats, employees, shifts, storeProfile }: PosClientProps) {
   const { items, total, addItem, removeItem, updateQuantity, clearCart } = useCartStore();
   const [searchInput, setSearchInput] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
@@ -52,6 +54,7 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
   const memberDropdownRef = useRef<HTMLDivElement>(null);
   const [memberSearchOpen, setMemberSearchOpen] = useState(false);
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const { triggerSync } = useSync();
   
   // Cashier Session State
   const [activeSession, setActiveSession] = useState<{ cashierName: string, shiftId: string } | null>(null);
@@ -139,6 +142,7 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
   const handleTransactionComplete = (tx: CompletedTransaction) => {
     setLastTx(tx);
     toast.success(`Transaksi ${tx.receiptNumber} berhasil!`, 3000);
+    triggerSync(); // Panggil event-based sync (5s debounce)
   };
 
   // Reset semua state ke kondisi awal (siap transaksi baru)
@@ -576,6 +580,7 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
           onNewTransaction={handleNewTransaction}
           cashierName={activeSession?.cashierName || 'Admin'}
           shiftId={activeSession?.shiftId || null}
+          storeProfile={storeProfile}
         />
       </div>
       </div>

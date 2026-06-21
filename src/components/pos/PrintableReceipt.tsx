@@ -8,6 +8,8 @@ interface PrintableReceiptProps {
     name: string;
     address: string;
     phone: string;
+    city?: string;
+    logoUrl?: string;
     footer: string;
     qrisProvider: string;
     edcBank: string;
@@ -30,8 +32,15 @@ export function PrintableReceipt({ transaction, items, storeConfig, className = 
   return (
     <div className={`thermal-receipt w-full text-[12px] leading-tight flex flex-col items-center ${className}`}>
       <div className="text-center mb-2 w-full">
+        {storeConfig.logoUrl && (
+          <div className="flex justify-center mb-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={storeConfig.logoUrl} alt="Logo" className="h-8 object-contain mix-blend-multiply grayscale" />
+          </div>
+        )}
         <div className="font-bold text-[16px] mb-1">{storeConfig.name.toUpperCase()}</div>
         <div className="break-words">{storeConfig.address}</div>
+        {storeConfig.city && <div>{storeConfig.city}</div>}
         <div>Telp: {storeConfig.phone}</div>
       </div>
       <div className="border-dashed-thermal my-2 w-full"></div>

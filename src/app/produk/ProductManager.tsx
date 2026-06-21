@@ -3,6 +3,7 @@
 
 import React, { useState, useTransition, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
+import Link from 'next/link';
 import { addProduct, deleteProduct, restockProduct, importProductsCSV } from './actions';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
@@ -274,6 +275,13 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
             )}
             {isPending ? 'Mengimpor...' : 'Import Excel'}
           </button>
+          <Link 
+            href="/produk/terima-stok"
+            className="h-11 px-4 flex items-center gap-2 rounded bg-tertiary-container text-on-tertiary-fixed font-label-md text-label-md font-bold hover:brightness-110 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">inventory_2</span>
+            Terima Stok (PO)
+          </Link>
           <button 
             onClick={() => setIsModalOpen(true)}
             className="h-11 px-4 flex items-center gap-2 rounded bg-primary-container text-on-primary-fixed font-label-md text-label-md font-bold hover:brightness-110 transition-colors"

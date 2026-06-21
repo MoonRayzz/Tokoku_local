@@ -4,10 +4,13 @@
 import prisma from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
-export async function voidTransaction(transactionId: string, pin: string) {
-  // Dalam sistem nyata, PIN ini dicocokkan dengan tabel User/Admin.
-  // Untuk arsitektur lokal ini, kita set statis "123456" sebagai PIN Manajer Toko.
-  if (pin !== '123456') {
+export async function voidTransaction(transactionId: string, pin: string, reason: string, notes: string, employeeId: string) {
+  // Ambil profil toko untuk mendapatkan PIN Void
+  const storeProfile = await prisma.storeProfile.findUnique({
+    where: { id: 'local-store' }
+  });
+
+  if (!storeProfile || pin !== storeProfile.voidPin) {
     return { success: false, error: 'Gagal: PIN Otorisasi tidak valid!' };
   }
 
@@ -30,21 +33,82 @@ export async function voidTransaction(transactionId: string, pin: string) {
 
       // 2. Kembalikan stok fisik untuk setiap barang yang ada di nota
       for (const detail of transaction.details) {
-        await tx.product.update({
+        const product = await tx.product.findUnique({ where: { id: detail.productId }});
+        if (!product) continue;
+
+        const updatedProduct = await tx.product.update({
           where: { id: detail.productId },
           data: {
             stock: { increment: detail.quantity }
           }
         });
+
+        // Catat pengembalian stok akibat void
+        const stockLog = await tx.stockLog.create({
+          data: {
+            productId: detail.productId,
+            type: 'VOID_RETURN',
+            amount: detail.quantity,
+            stockBefore: product.stock,
+            stockAfter: updatedProduct.stock,
+            referenceId: transaction.id,
+            employeeId: 'Manager', // Sesuai dengan auth pin statis di atas
+            syncStatus: 'PENDING'
+          }
+        });
+
+        // Queue Product update
+        await tx.syncQueue.create({
+          data: {
+            tableName: 'Product',
+            recordId: updatedProduct.id,
+            operation: 'UPDATE',
+            payload: JSON.stringify(updatedProduct),
+            status: 'PENDING'
+          }
+        });
+
+        // Queue StockLog insert
+        await tx.syncQueue.create({
+          data: {
+            tableName: 'StockLog',
+            recordId: stockLog.id,
+            operation: 'INSERT',
+            payload: JSON.stringify(stockLog),
+            status: 'PENDING'
+          }
+        });
       }
 
-      // 3. Masukkan aktivitas Void ini ke dalam antrean sinkronisasi cloud
+      // 3. Buat VoidLog
+      const voidLog = await tx.voidLog.create({
+        data: {
+          transactionId: transaction.id,
+          reason,
+          notes,
+          employeeId,
+          syncStatus: 'PENDING'
+        }
+      });
+
+      // 4. Masukkan aktivitas Void ke dalam antrean sinkronisasi cloud
       await tx.syncQueue.create({
         data: {
           tableName: 'Transaction',
           recordId: transaction.id,
           operation: 'UPDATE', // Karena kita mengubah kolom isVoid
           payload: JSON.stringify(updatedTx),
+          status: 'PENDING'
+        }
+      });
+
+      // Queue VoidLog insert
+      await tx.syncQueue.create({
+        data: {
+          tableName: 'VoidLog',
+          recordId: voidLog.id,
+          operation: 'INSERT',
+          payload: JSON.stringify(voidLog),
           status: 'PENDING'
         }
       });

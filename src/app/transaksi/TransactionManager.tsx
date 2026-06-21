@@ -6,6 +6,7 @@ import { voidTransaction } from './actions';
 import { useToast } from '@/components/ui/Toast';
 import { PaymentBadge } from '@/components/ui/PaymentBadge';
 import { PrintableReceipt } from '@/components/pos/PrintableReceipt';
+import { useSync } from '@/context/SyncContext';
 
 // Tipe data hasil join Prisma
 type TransactionDetail = {
@@ -53,9 +54,12 @@ export default function TransactionManager({ initialTransactions, shifts }: Tran
   const [selectedTx, setSelectedTx] = useState<TransactionData | null>(null);
   const [voidModalOpen, setVoidModalOpen] = useState(false);
   const [pin, setPin] = useState('');
+  const [voidReason, setVoidReason] = useState('SALAH_INPUT');
+  const [voidNotes, setVoidNotes] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isPending, startTransition] = useTransition();
   const toast = useToast();
+  const { triggerSync } = useSync();
 
   const [storeConfig, setStoreConfig] = React.useState({
     name: 'TOKOKU POS LOKAL',
@@ -104,12 +108,15 @@ export default function TransactionManager({ initialTransactions, shifts }: Tran
     setErrorMessage('');
 
     startTransition(async () => {
-      const result = await voidTransaction(selectedTx.id, pin);
+      const currentCashier = localStorage.getItem('tokoku_cashier_name') || 'Admin';
+      const result = await voidTransaction(selectedTx.id, pin, voidReason, voidNotes, currentCashier);
       if (result.success) {
+        toast.show('Berhasil', 'Transaksi telah dibatalkan', 'success');
         setVoidModalOpen(false);
+        triggerSync(); // Panggil event-based sync (5s debounce)
         setPin('');
+        setVoidNotes('');
         setSelectedTx(null);
-        toast.success('Transaksi berhasil dibatalkan dan stok telah dikembalikan.');
       } else {
         setErrorMessage(result.error || 'Terjadi kesalahan.');
         setPin('');
@@ -123,6 +130,8 @@ export default function TransactionManager({ initialTransactions, shifts }: Tran
     setVoidModalOpen(true);
     setErrorMessage('');
     setPin('');
+    setVoidNotes('');
+    setVoidReason('SALAH_INPUT');
   };
 
   // ── Method filter buttons ──
@@ -355,15 +364,43 @@ export default function TransactionManager({ initialTransactions, shifts }: Tran
                   {errorMessage}
                 </div>
               )}
-              <input
-                type="password"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                autoFocus
-                placeholder="••••••"
-                className="w-full bg-background border border-border rounded-xl h-14 text-center text-2xl tracking-[1em] text-text-primary focus:outline-none focus:border-danger transition-all mb-6"
-                maxLength={6}
-              />
+              
+              <div className="mb-4 text-left">
+                <label className="block text-sm font-medium text-text-secondary mb-1">Alasan Pembatalan</label>
+                <select 
+                  className="w-full bg-background border border-border rounded text-text-primary px-3 py-2 focus:outline-none focus:border-danger"
+                  value={voidReason}
+                  onChange={(e) => setVoidReason(e.target.value)}
+                >
+                  <option value="SALAH_INPUT">Salah Input Kasir</option>
+                  <option value="RETUR_PELANGGAN">Retur Pelanggan</option>
+                  <option value="LAINNYA">Lainnya</option>
+                </select>
+              </div>
+
+              <div className="mb-4 text-left">
+                <label className="block text-sm font-medium text-text-secondary mb-1">Keterangan Tambahan</label>
+                <textarea 
+                  className="w-full bg-background border border-border rounded text-text-primary px-3 py-2 focus:outline-none focus:border-danger min-h-[60px]"
+                  placeholder="Opsional, misal: Barang cacat dari pabrik..."
+                  value={voidNotes}
+                  onChange={(e) => setVoidNotes(e.target.value)}
+                />
+              </div>
+
+              <div className="mb-6 text-left">
+                <label className="block text-sm font-medium text-text-secondary mb-1">PIN Supervisor</label>
+                <input
+                  type="password"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  autoFocus
+                  placeholder="••••••"
+                  className="w-full bg-background border border-border rounded-xl h-14 text-center text-2xl tracking-[1em] text-text-primary focus:outline-none focus:border-danger transition-all"
+                  maxLength={6}
+                />
+              </div>
+
               <div className="flex gap-3">
                 <button
                   type="button"

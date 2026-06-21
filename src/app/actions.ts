@@ -135,6 +135,19 @@ export async function processCheckout(payload: CheckoutPayload) {
           data: { stock: { decrement: item.quantity } },
         });
 
+        const stockLog = await tx.stockLog.create({
+          data: {
+            productId: item.productId,
+            type: 'OUT',
+            amount: item.quantity,
+            stockBefore: product.stock,
+            stockAfter: updatedProduct.stock,
+            referenceId: transaction.id,
+            employeeId: cashierName || 'Kasir',
+            syncStatus: 'PENDING'
+          }
+        });
+
         // Queue Product update to Cloud
         await tx.syncQueue.create({
           data: {
@@ -142,6 +155,17 @@ export async function processCheckout(payload: CheckoutPayload) {
             recordId: updatedProduct.id,
             operation: 'UPDATE',
             payload: JSON.stringify(updatedProduct),
+            status: 'PENDING'
+          }
+        });
+
+        // Queue StockLog insert to Cloud
+        await tx.syncQueue.create({
+          data: {
+            tableName: 'StockLog',
+            recordId: stockLog.id,
+            operation: 'INSERT',
+            payload: JSON.stringify(stockLog),
             status: 'PENDING'
           }
         });

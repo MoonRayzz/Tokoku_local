@@ -68,9 +68,37 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    const expenses = await prisma.expense.findMany({
+      where: {
+        date: { gte: currentStart, lt: currentEnd },
+        ...(shiftStr ? { shiftId: shiftStr } : {})
+      },
+      include: {
+        employee: true
+      },
+      orderBy: {
+        date: 'desc'
+      }
+    });
+
+    const expenseData = expenses.map(exp => {
+      const date = new Date(exp.date);
+      return {
+        'Tanggal': date.toISOString().split('T')[0],
+        'Jam': date.toTimeString().split(' ')[0],
+        'Kategori': exp.category,
+        'Nominal': exp.amount,
+        'Keterangan': exp.notes || '-',
+        'Kasir / PIC': exp.employee.name
+      };
+    });
+
     const worksheet = XLSX.utils.json_to_sheet(data);
+    const expenseWorksheet = XLSX.utils.json_to_sheet(expenseData);
+    
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Laporan Penjualan');
+    XLSX.utils.book_append_sheet(workbook, expenseWorksheet, 'Pengeluaran');
 
     const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 

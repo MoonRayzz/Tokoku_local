@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { getStoreProfile } from '@/app/pengaturan/actions';
+import { SyncIndicator } from '../sync/SyncIndicator';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -77,18 +78,7 @@ export function Sidebar() {
         })}
       </div>
 
-      {/* Footer Profile */}
-      <div className="p-4 border-t border-border mt-auto flex items-center shrink-0">
-        <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center shrink-0 border border-border">
-          <span className="material-symbols-outlined text-text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>
-            account_circle
-          </span>
-        </div>
-        <div className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap flex flex-col">
-          <span className="text-[12px] font-medium text-text-primary">Admin Kasir</span>
-          <span className="text-[10px] text-text-secondary">Terhubung</span>
-        </div>
-      </div>
+      <SyncIndicator />
     </nav>
   );
 }

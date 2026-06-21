@@ -4,7 +4,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
-import { AutoSyncWorker } from "@/components/features/AutoSyncWorker";
+import { SyncProvider } from "@/context/SyncContext";
+import { SyncEngine } from "@/components/sync/SyncEngine";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmDialogProvider } from "@/components/ui/ConfirmDialog";
 import prisma from "@/lib/db";
@@ -52,25 +53,27 @@ export default async function RootLayout({
           <ConfirmDialogProvider>
 
             {/* PEKERJA BAYANGAN: Aktif mendengarkan internet dan otomatis mengirim data tertunda */}
-            <AutoSyncWorker />
+            <SyncProvider>
+              <SyncEngine />
 
-            {/* Komponen Navigasi Utama */}
-            <Sidebar />
+              {/* Komponen Navigasi Utama */}
+              <Sidebar />
 
-            {/* Pembungkus Halaman */}
-            <div className="flex-1 flex flex-col ml-sidebar-collapsed h-screen overflow-hidden">
-              {/* Topbar diisi angka aktual dari Database lokal */}
-              <TopBar 
-                pendingSyncCount={pendingSyncCount} 
-                lowStockProducts={lowStockProducts}
-                emptyStockProducts={emptyStockProducts}
-              />
-              
-              {/* Area Konten Utama */}
-              <main className="flex-1 mt-16 overflow-y-auto bg-background">
-                {children}
-              </main>
-            </div>
+              {/* Pembungkus Halaman */}
+              <div className="flex-1 flex flex-col ml-sidebar-collapsed h-screen overflow-hidden">
+                {/* Topbar diisi angka aktual dari Database lokal */}
+                <TopBar 
+                  pendingSyncCount={pendingSyncCount} 
+                  lowStockProducts={lowStockProducts}
+                  emptyStockProducts={emptyStockProducts}
+                />
+                
+                {/* Area Konten Utama */}
+                <main className="flex-1 mt-16 overflow-y-auto bg-background">
+                  {children}
+                </main>
+              </div>
+            </SyncProvider>
 
           </ConfirmDialogProvider>
         </ToastProvider>

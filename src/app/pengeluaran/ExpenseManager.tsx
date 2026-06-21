@@ -5,6 +5,7 @@ import { addExpense } from './actions';
 import { useToast } from '@/components/ui/Toast';
 import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
+import { useSync } from '@/context/SyncContext';
 
 interface Expense {
   id: string;
@@ -32,6 +33,7 @@ const CATEGORIES = [
 export default function ExpenseManager({ expenses }: ExpenseManagerProps) {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
+  const { triggerSync } = useSync();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -44,6 +46,7 @@ export default function ExpenseManager({ expenses }: ExpenseManagerProps) {
     if (res.success) {
       toast.success('Pengeluaran berhasil dicatat!');
       (e.target as HTMLFormElement).reset();
+      triggerSync(); // Trigger event-based sync
     } else {
       toast.error(res.error || 'Terjadi kesalahan.');
     }

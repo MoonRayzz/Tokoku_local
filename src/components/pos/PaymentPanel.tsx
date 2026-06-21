@@ -20,6 +20,7 @@ interface PaymentPanelProps {
   onNewTransaction: () => void;
   cashierName: string;
   shiftId: string | null;
+  storeProfile?: any;
 }
 
 export function PaymentPanel({
@@ -33,6 +34,7 @@ export function PaymentPanel({
   onNewTransaction,
   cashierName,
   shiftId,
+  storeProfile,
 }: PaymentPanelProps) {
   const handleSuccess = useCallback(
     (tx: CompletedTransaction) => {
@@ -116,6 +118,7 @@ export function PaymentPanel({
             items={items}
             onNewTransaction={handleNewTransaction}
             onPrint={handlePrint}
+            storeProfile={storeProfile}
           />
         ) : (
           <>

@@ -12,9 +12,12 @@ export async function syncToCloud() {
       return { success: false, error: 'Kredensial Supabase belum diatur di file .env' };
     }
 
-    // Mengambil maksimal 50 antrean terlama untuk mencegah timeout
+    // Mengambil maksimal 50 antrean (PENDING atau FAILED yang retry-nya < 3)
     const pendingItems = await prisma.syncQueue.findMany({
-      where: { status: 'PENDING' },
+      where: { 
+        status: { in: ['PENDING', 'FAILED'] },
+        retryCount: { lt: 3 }
+      },
       orderBy: { createdAt: 'asc' },
       take: 50
     });
@@ -59,6 +62,18 @@ export async function syncToCloud() {
             const { error: detailsError } = await supabase.from('TransactionDetail').upsert(detailPayload);
             if (detailsError) throw detailsError;
           }
+        } else if (item.tableName === 'PurchaseOrder') {
+          // Pisahkan relasi items
+          const { items, supplier, ...mainPo } = payload;
+          
+          const { error: poError } = await supabase.from('PurchaseOrder').upsert(mainPo);
+          if (poError) throw poError;
+
+          if (items && Array.isArray(items) && items.length > 0) {
+            const itemsPayload = items.map(({ product, purchaseOrder, ...d }: any) => d);
+            const { error: itemsError } = await supabase.from('PoItem').upsert(itemsPayload);
+            if (itemsError) throw itemsError;
+          }
         } else {
           // Fallback untuk tabel lain (misal jika nanti Anda menambahkan sync Produk/Member)
           if (item.operation === 'DELETE') {
@@ -91,10 +106,17 @@ export async function syncToCloud() {
         console.error(`Gagal sync item ${item.id}:`, error);
         syncError = error;
         
-        // Catat pesan error dari Supabase ke SQLite lokal
+        const newRetryCount = item.retryCount + 1;
+        const newStatus = newRetryCount >= 3 ? 'FAILED_PERMANENT' : 'FAILED';
+        
+        // Catat pesan error dari Supabase ke SQLite lokal, tambah retryCount
         await prisma.syncQueue.update({
           where: { id: item.id },
-          data: { errorMessage: error.message || 'Unknown error' }
+          data: { 
+            status: newStatus,
+            errorMessage: error.message || String(error) || 'Unknown error',
+            retryCount: newRetryCount
+          }
         });
       }
     }
@@ -399,4 +421,32 @@ export async function saveStoreProfile(data: any) {
     console.error('Failed to save store profile:', err);
     return { success: false, error: err.message };
   }
+}
+
+export async function clearSyncQueue() {
+  await prisma.syncQueue.deleteMany({
+    where: { status: 'SYNCED' }
+  });
+  revalidatePath('/pengaturan');
+  return { success: true };
+}
+
+export async function getPendingSyncCount() {
+  const count = await prisma.syncQueue.count({
+    where: {
+      status: { in: ['PENDING', 'FAILED'] },
+      retryCount: { lt: 3 }
+    }
+  });
+  return count;
+}
+
+export async function getFailedSyncItems() {
+  const items = await prisma.syncQueue.findMany({
+    where: {
+      status: 'FAILED_PERMANENT'
+    },
+    orderBy: { updatedAt: 'desc' }
+  });
+  return items;
 }

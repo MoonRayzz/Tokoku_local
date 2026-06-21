@@ -5,7 +5,7 @@ import PosClient from './PosClient';
 import { PageTransition } from '@/components/ui/PageTransition';
 
 export default async function POSPage() {
-  const [products, members, tiers, txGrouped, allEmployees, shifts, activeAttendances] = await Promise.all([
+  const [products, members, tiers, txGrouped, allEmployees, shifts, activeAttendances, storeProfile] = await Promise.all([
     prisma.product.findMany({
       select: { id: true, sku: true, name: true, priceRetail: true, priceWholesale: true, wholesaleMinQty: true, stock: true }
     }),
@@ -38,6 +38,9 @@ export default async function POSPage() {
         checkOut: null
       },
       select: { employeeId: true }
+    }),
+    prisma.storeProfile.findUnique({
+      where: { id: 'local-store' }
     })
   ]);
 
@@ -63,6 +66,7 @@ export default async function POSPage() {
         memberStats={memberStats}
         employees={employees}
         shifts={shifts}
+        storeProfile={storeProfile}
       />
     </PageTransition>
   );

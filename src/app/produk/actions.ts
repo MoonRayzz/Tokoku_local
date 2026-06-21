@@ -59,6 +59,31 @@ export async function addProduct(formData: FormData) {
           status: 'PENDING'
         }
       });
+
+      if (stock > 0) {
+        const stockLog = await tx.stockLog.create({
+          data: {
+            productId: product.id,
+            type: 'IN',
+            amount: stock,
+            stockBefore: 0,
+            stockAfter: stock,
+            notes: 'Stok awal saat pembuatan produk',
+            employeeId: 'Admin',
+            syncStatus: 'PENDING'
+          }
+        });
+
+        await tx.syncQueue.create({
+          data: {
+            tableName: 'StockLog',
+            recordId: stockLog.id,
+            operation: 'INSERT',
+            payload: JSON.stringify(stockLog),
+            status: 'PENDING'
+          }
+        });
+      }
     });
 
     // Refresh halaman produk secara instan
@@ -96,10 +121,37 @@ export async function restockProduct(id: string, additionalStock: number, formDa
         dataToUpdate.wholesaleMinQty = wholesaleMinQty ? parseInt(wholesaleMinQty) : null;
       }
 
+      const productBefore = await tx.product.findUnique({ where: { id } });
+
       const updatedProduct = await tx.product.update({
         where: { id },
         data: dataToUpdate
       });
+
+      if (additionalStock > 0 && productBefore) {
+        const stockLog = await tx.stockLog.create({
+          data: {
+            productId: id,
+            type: 'CORRECTION',
+            amount: additionalStock,
+            stockBefore: productBefore.stock,
+            stockAfter: updatedProduct.stock,
+            notes: additionalStock > 0 ? 'Penambahan stok manual' : 'Pengurangan stok manual',
+            employeeId: 'Admin',
+            syncStatus: 'PENDING'
+          }
+        });
+
+        await tx.syncQueue.create({
+          data: {
+            tableName: 'StockLog',
+            recordId: stockLog.id,
+            operation: 'INSERT',
+            payload: JSON.stringify(stockLog),
+            status: 'PENDING'
+          }
+        });
+      }
 
       await tx.syncQueue.create({
         data: {

@@ -9,6 +9,7 @@ interface PaymentSuccessProps {
   items: CartItem[];
   onNewTransaction: () => void;
   onPrint: (tx: CompletedTransaction) => void;
+  storeProfile?: any;
 }
 
 const formatRp = (n: number) =>
@@ -18,12 +19,14 @@ const formatRp = (n: number) =>
     minimumFractionDigits: 0,
   }).format(n);
 
-export function PaymentSuccess({ transaction, items, onNewTransaction, onPrint }: PaymentSuccessProps) {
+export function PaymentSuccess({ transaction, items, onNewTransaction, onPrint, storeProfile }: PaymentSuccessProps) {
   const [storeConfig, setStoreConfig] = React.useState({
-    name: 'TOKOKU POS LOKAL',
-    address: 'Jl. Pendidikan Raya No. 1, Jakarta',
-    phone: '08123456789',
-    footer: 'Terima kasih atas kunjungan Anda!\nBarang yang sudah dibeli tidak dapat ditukar.',
+    name: storeProfile?.name || 'TOKOKU POS LOKAL',
+    address: storeProfile?.address || 'Jl. Pendidikan Raya No. 1, Jakarta',
+    phone: storeProfile?.phone || '08123456789',
+    city: storeProfile?.city || '',
+    logoUrl: storeProfile?.logoUrl || '',
+    footer: storeProfile?.footer || 'Terima kasih atas kunjungan Anda!\nBarang yang sudah dibeli tidak dapat ditukar.',
     qrisProvider: 'GoPay Merchant',
     edcBank: 'BCA',
   });
@@ -31,7 +34,14 @@ export function PaymentSuccess({ transaction, items, onNewTransaction, onPrint }
   React.useEffect(() => {
     const saved = localStorage.getItem('tokoku_config');
     if (saved) {
-      try { setStoreConfig(JSON.parse(saved)); } catch {}
+      try { 
+        const parsed = JSON.parse(saved);
+        setStoreConfig(prev => ({
+          ...prev,
+          qrisProvider: parsed.qrisProvider || prev.qrisProvider,
+          edcBank: parsed.edcBank || prev.edcBank
+        }));
+      } catch {}
     }
   }, []);
 

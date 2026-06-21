@@ -19,6 +19,8 @@ model Product {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   TransactionDetail TransactionDetail[]
+  PoItem            PoItem[]
+  StockLog          StockLog[]
 }
 
 model Member {
@@ -45,6 +47,7 @@ model Transaction {
   createdAt      DateTime            @default(now())
   member         Member?             @relation(fields: [memberId], references: [id])
   details        TransactionDetail[]
+  VoidLog        VoidLog?
 }
 
 model TransactionDetail {
@@ -79,6 +82,7 @@ model SyncQueue {
   payload      String
   status       String   @default("PENDING")
   errorMessage String?
+  retryCount   Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -142,6 +146,7 @@ model StoreProfile {
   latitude  Float?
   longitude Float?
   radius    Int      @default(50)
+  voidPin   String   @default("123456")
   updatedAt DateTime @updatedAt
 }
 model Expense {
@@ -157,4 +162,65 @@ model Expense {
   updatedAt   DateTime @updatedAt
   employee    Employee @relation(fields: [employeeId], references: [id])
   shift       Shift?   @relation(fields: [shiftId], references: [id])
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  PurchaseOrder PurchaseOrder[]
+}
+
+model PurchaseOrder {
+  id          String   @id @default(uuid())
+  supplierId  String?
+  date        DateTime @default(now())
+  totalAmount Float
+  notes       String?
+  syncStatus  String   @default("PENDING")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  supplier    Supplier? @relation(fields: [supplierId], references: [id])
+  items       PoItem[]
+}
+
+model PoItem {
+  id              String        @id @default(uuid())
+  poId            String
+  productId       String
+  quantity        Int
+  priceBuy        Float
+  subtotal        Float
+  purchaseOrder   PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  product         Product       @relation(fields: [productId], references: [id])
+}
+
+model StockLog {
+  id          String   @id @default(uuid())
+  productId   String
+  type        String   // IN, OUT, CORRECTION, VOID_RETURN
+  amount      Int
+  stockBefore Int
+  stockAfter  Int
+  notes       String?
+  referenceId String?  // ID transaksi atau PO
+  employeeId  String?  // Kasir yang melakukan (opsional krn auto-sync kadang tidak tahu)
+  date        DateTime @default(now())
+  syncStatus  String   @default("PENDING")
+  product     Product  @relation(fields: [productId], references: [id])
+}
+
+model VoidLog {
+  id            String      @id @default(uuid())
+  transactionId String      @unique
+  reason        String      // SALAH_INPUT, RETUR_PELANGGAN, LAINNYA
+  notes         String?
+  employeeId    String?     // Nama kasir atau supervisor yang melakukan void
+  date          DateTime    @default(now())
+  syncStatus    String      @default("PENDING")
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
 }
