@@ -131,6 +131,18 @@ export function PrintableReceipt({ transaction, items, storeConfig, className = 
             <div className="flex justify-between w-full"><span>Status</span><span>LUNAS</span></div>
           </>
         )}
+
+        {transaction.paymentMethod === 'utang' && (
+          <>
+            <div className="flex justify-between w-full font-bold"><span>Metode Bayar</span><span>UTANG / PIUTANG</span></div>
+            <div className="flex justify-between w-full font-bold mt-1 border border-black px-1 py-0.5 text-center justify-center">
+              <span>* BELUM LUNAS *</span>
+            </div>
+            {transaction.debtorName && (
+              <div className="flex justify-between w-full mt-1"><span>Nama</span><span>{transaction.debtorName}</span></div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="border-dashed-thermal my-2 w-full"></div>

@@ -36,11 +36,18 @@ const METHODS: {
     icon: 'credit_card',
     activeClasses: 'border-orange-500 bg-orange-500/10 text-orange-400',
   },
+  {
+    id: 'utang',
+    label: 'Utang',
+    sublabel: 'Piutang Pelanggan',
+    icon: 'account_balance_wallet',
+    activeClasses: 'border-rose-500 bg-rose-500/10 text-rose-400',
+  },
 ];
 
 export function MethodSelector({ selected, onSelect, disabled }: MethodSelectorProps) {
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
       {METHODS.map((m) => {
         const isActive = selected === m.id;
         return (

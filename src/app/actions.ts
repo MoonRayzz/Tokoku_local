@@ -4,7 +4,7 @@
 import prisma from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
-export type PaymentMethod = 'cash' | 'qris' | 'debit';
+export type PaymentMethod = 'cash' | 'qris' | 'debit' | 'utang';
 
 // Interface payload checkout dari client
 interface CheckoutPayload {
@@ -22,14 +22,21 @@ interface CheckoutPayload {
   approvalCode?: string;   // Wajib jika debit
   cashierName: string;
   shiftId: string | null;
+  debtorInfo?: {
+    debtorName: string;
+    debtorPhone?: string;
+    debtorNotes?: string;
+    memberId?: string;
+    isLimitOverride?: boolean;
+  };
 }
 
-const VALID_METHODS: PaymentMethod[] = ['cash', 'qris', 'debit'];
+const VALID_METHODS: PaymentMethod[] = ['cash', 'qris', 'debit', 'utang'];
 const APPROVAL_REGEX = /^[A-Z0-9]{4,8}$/;
 
 export async function processCheckout(payload: CheckoutPayload) {
   try {
-    const { totalAmount, discountAmount = 0, paymentMethod, cashReceived, approvalCode, items, cashierName, shiftId } = payload;
+    const { totalAmount, discountAmount = 0, paymentMethod, cashReceived, approvalCode, debtorInfo, items, cashierName, shiftId } = payload;
 
     // ═══════════════════════════════════════════
     // VALIDASI SERVER-SIDE (tidak percaya client)
@@ -62,6 +69,12 @@ export async function processCheckout(payload: CheckoutPayload) {
       const cleanCode = approvalCode.toUpperCase().trim();
       if (!APPROVAL_REGEX.test(cleanCode)) {
         return { success: false, error: 'Kode approval harus 4–8 karakter alphanumeric (A–Z, 0–9).' };
+      }
+    }
+
+    if (paymentMethod === 'utang') {
+      if (!debtorInfo || !debtorInfo.debtorName) {
+        return { success: false, error: 'Informasi pengutang (nama) wajib diisi untuk transaksi utang.' };
       }
     }
 
@@ -166,6 +179,38 @@ export async function processCheckout(payload: CheckoutPayload) {
             recordId: stockLog.id,
             operation: 'INSERT',
             payload: JSON.stringify(stockLog),
+            status: 'PENDING'
+          }
+        });
+      }
+
+      // D. Buat Record Utang jika metode pembayaran adalah utang
+      let debtRecord = null;
+      if (paymentMethod === 'utang' && debtorInfo) {
+        debtRecord = await tx.debt.create({
+          data: {
+            transactionId: transaction.id,
+            debtorName: debtorInfo.debtorName,
+            debtorPhone: debtorInfo.debtorPhone || null,
+            debtorNotes: debtorInfo.debtorNotes || null,
+            memberId: debtorInfo.memberId || null,
+            totalAmount: totalAmount - discountAmount, // hutang netto
+            paidAmount: 0,
+            remaining: totalAmount - discountAmount,
+            status: 'UNPAID',
+            kasirId: cashierName || 'Kasir',
+            isLimitOverride: debtorInfo.isLimitOverride || false,
+            syncStatus: 'PENDING'
+          }
+        });
+
+        // Queue Debt insert to Cloud
+        await tx.syncQueue.create({
+          data: {
+            tableName: 'Debt',
+            recordId: debtRecord.id,
+            operation: 'INSERT',
+            payload: JSON.stringify(debtRecord),
             status: 'PENDING'
           }
         });

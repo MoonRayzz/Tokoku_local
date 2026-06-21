@@ -72,6 +72,7 @@ export default async function LaporanPage(props: Props) {
     currentTxAgg,
     prevTxAgg,
     expenseAgg,
+    debtPaymentAgg,
     hourlyTxData,
     topSellersRaw
   ] = await Promise.all([
@@ -89,10 +90,17 @@ export default async function LaporanPage(props: Props) {
       where: expenseFilter,
       _sum: { amount: true }
     }),
+    prisma.debtPayment.aggregate({
+      where: {
+        paidAt: { gte: currentStart, lt: currentEnd },
+        ...(params?.shift ? { kasirId: shifts.find(s => s.id === params.shift)?.name || '' } : {})
+      },
+      _sum: { amount: true }
+    }),
     // Fetch minimal untuk grafik per jam
     prisma.transaction.findMany({
       where: txFilter,
-      select: { createdAt: true, totalAmount: true }
+      select: { createdAt: true, totalAmount: true, paymentMethod: true }
     }),
     // Fetch minimal untuk top sellers
     prisma.transactionDetail.groupBy({
@@ -105,12 +113,22 @@ export default async function LaporanPage(props: Props) {
   ]);
 
   // 4. Kalkulasi KPI Utama
+  // Total penjualan murni (tunai/qris/debit)
+  const pureSales = hourlyTxData.filter(tx => tx.paymentMethod !== 'utang').reduce((sum, tx) => sum + tx.totalAmount, 0);
+  
+  // Total utang baru
+  const newDebt = hourlyTxData.filter(tx => tx.paymentMethod === 'utang').reduce((sum, tx) => sum + tx.totalAmount, 0);
+  
+  // Total penjualan (kotor termasuk utang, ini hanya untuk growth/volume metric)
   const totalSales = currentTxAgg._sum.totalAmount || 0;
   const txCount = currentTxAgg._count.id;
   const avgOrder = txCount > 0 ? totalSales / txCount : 0;
   
   const totalExpense = expenseAgg._sum.amount || 0;
-  const netBalance = totalSales - totalExpense;
+  const debtPaymentIn = debtPaymentAgg._sum.amount || 0;
+  
+  // Saldo bersih riil = Penjualan Murni (Cash In/Qris/Debit) + Cicilan Masuk - Pengeluaran
+  const netBalance = pureSales + debtPaymentIn - totalExpense;
 
   const yTotalSales = prevTxAgg._sum.totalAmount || 0;
   const yTxCount = prevTxAgg._count.id;
@@ -155,7 +173,7 @@ export default async function LaporanPage(props: Props) {
 
   // Susun dan bungkus datanya
   const reportData = {
-    today: { totalSales, txCount, avgOrder, totalExpense, netBalance },
+    today: { totalSales, pureSales, newDebt, debtPaymentIn, txCount, avgOrder, totalExpense, netBalance },
     growth: { salesGrowth, txGrowth, avgGrowth },
     topSellers,
     hourlySales,

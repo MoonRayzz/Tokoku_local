@@ -4,8 +4,8 @@
 import { useState, useCallback } from 'react';
 import { processCheckout } from '@/app/actions';
 
-export type PaymentMethod = 'cash' | 'qris' | 'debit';
-export type PaymentState = 'idle' | 'cash' | 'qris' | 'debit' | 'success' | 'error';
+export type PaymentMethod = 'cash' | 'qris' | 'debit' | 'utang';
+export type PaymentState = 'idle' | 'cash' | 'qris' | 'debit' | 'utang' | 'success' | 'error';
 
 export interface CartItem {
   productId: string;
@@ -27,6 +27,14 @@ export interface CompletedTransaction {
   cashierName?: string;
 }
 
+export type DebtorInfo = {
+  debtorName: string;
+  debtorPhone?: string;
+  debtorNotes?: string;
+  memberId?: string;
+  isLimitOverride?: boolean;
+};
+
 interface UsePaymentOptions {
   total: number;
   discountAmount?: number;
@@ -47,6 +55,7 @@ interface UsePaymentReturn {
   confirmCash: (cashReceived: number) => Promise<void>;
   confirmQris: () => Promise<void>;
   confirmDebit: (approvalCode: string) => Promise<void>;
+  confirmUtang: (info: DebtorInfo) => Promise<void>;
   reset: () => void;
 }
 
@@ -80,7 +89,7 @@ export function usePayment({
   // --- Shared submit logic ---
   const submit = async (
     paymentMethod: PaymentMethod,
-    extras: { cashReceived?: number; approvalCode?: string }
+    extras: { cashReceived?: number; approvalCode?: string; debtorInfo?: DebtorInfo }
   ) => {
     if (items.length === 0) {
       setError('Keranjang belanja kosong.');
@@ -104,6 +113,7 @@ export function usePayment({
         paymentMethod,
         cashReceived: extras.cashReceived,
         approvalCode: extras.approvalCode,
+        debtorInfo: extras.debtorInfo,
         cashierName,
         shiftId,
       });
@@ -169,6 +179,15 @@ export function usePayment({
     [total, items, memberId]
   );
 
+  // --- Utang: simpan info debtor ---
+  const confirmUtang = useCallback(
+    async (info: DebtorInfo) => {
+      await submit('utang', { debtorInfo: info });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [total, items, memberId]
+  );
+
   return {
     state,
     isLoading,
@@ -178,6 +197,7 @@ export function usePayment({
     confirmCash,
     confirmQris,
     confirmDebit,
+    confirmUtang,
     reset,
   };
 }

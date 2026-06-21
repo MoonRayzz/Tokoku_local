@@ -21,7 +21,7 @@ type TopSeller = {
 };
 
 type ReportData = {
-  today: { totalSales: number; txCount: number; avgOrder: number; totalExpense: number; netBalance: number };
+  today: { totalSales: number; pureSales: number; newDebt: number; debtPaymentIn: number; txCount: number; avgOrder: number; totalExpense: number; netBalance: number };
   growth: { salesGrowth: number; txGrowth: number; avgGrowth: number };
   topSellers: TopSeller[];
   hourlySales: number[];
@@ -197,16 +197,27 @@ export default function ReportManager({ data, shifts }: { data: ReportData, shif
       </div>
 
       {/* KPIs (Bento Grid Style) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-gutter">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-gutter">
         
-        {/* KPI: Total Omzet */}
+        {/* KPI: Penjualan Murni */}
         <div className="bg-surface border border-border rounded-lg p-6 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <span className="material-symbols-outlined text-primary-container" style={{ fontSize: '64px' }}>payments</span>
           </div>
-          <p className="font-label-md text-label-md text-text-secondary uppercase tracking-wider mb-2">Total Omzet</p>
+          <p className="font-label-md text-label-md text-text-secondary uppercase tracking-wider mb-2">Penjualan Murni</p>
           <div className="flex items-baseline gap-2">
-            <span className="font-display-lg text-display-lg text-text-primary tracking-tight">{formatRp(data.today.totalSales)}</span>
+            <span className="font-display-lg text-display-lg text-text-primary tracking-tight">{formatRp(data.today.pureSales)}</span>
+          </div>
+        </div>
+
+        {/* KPI: Cicilan Masuk */}
+        <div className="bg-surface border border-border rounded-lg p-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <span className="material-symbols-outlined text-success" style={{ fontSize: '64px' }}>savings</span>
+          </div>
+          <p className="font-label-md text-label-md text-text-secondary uppercase tracking-wider mb-2">Cicilan Masuk</p>
+          <div className="flex items-baseline gap-2">
+            <span className="font-display-lg text-display-lg text-success tracking-tight">{formatRp(data.today.debtPaymentIn)}</span>
           </div>
         </div>
 
@@ -226,9 +237,20 @@ export default function ReportManager({ data, shifts }: { data: ReportData, shif
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <span className="material-symbols-outlined text-primary" style={{ fontSize: '64px' }}>account_balance</span>
           </div>
-          <p className="font-label-md text-label-md text-text-secondary uppercase tracking-wider mb-2">Saldo Bersih Shift</p>
+          <p className="font-label-md text-label-md text-text-secondary uppercase tracking-wider mb-2">Saldo Bersih Tunai</p>
           <div className="flex items-baseline gap-2">
             <span className="font-display-lg text-display-lg text-primary-fixed tracking-tight">{formatRp(data.today.netBalance)}</span>
+          </div>
+        </div>
+
+        {/* KPI: Utang Baru */}
+        <div className="bg-surface border border-border rounded-lg p-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <span className="material-symbols-outlined text-rose-500" style={{ fontSize: '64px' }}>money_off</span>
+          </div>
+          <p className="font-label-md text-label-md text-text-secondary uppercase tracking-wider mb-2">Utang Baru Diberikan</p>
+          <div className="flex items-baseline gap-2">
+            <span className="font-display-lg text-display-lg text-rose-500 tracking-tight">{formatRp(data.today.newDebt)}</span>
           </div>
         </div>
 

@@ -278,6 +278,9 @@ export async function pullUpdatesFromCloud() {
             city: remoteProfile.city,
             footer: remoteProfile.footer,
             logoUrl: remoteProfile.logoUrl,
+            debtEnabled: remoteProfile.debtEnabled,
+            debtLimitPerPerson: remoteProfile.debtLimitPerPerson,
+            debtLimitBehavior: remoteProfile.debtLimitBehavior,
             updatedAt: new Date(remoteProfile.updatedAt)
           },
           create: {
@@ -288,6 +291,9 @@ export async function pullUpdatesFromCloud() {
             city: remoteProfile.city,
             footer: remoteProfile.footer,
             logoUrl: remoteProfile.logoUrl,
+            debtEnabled: remoteProfile.debtEnabled,
+            debtLimitPerPerson: remoteProfile.debtLimitPerPerson,
+            debtLimitBehavior: remoteProfile.debtLimitBehavior,
             updatedAt: new Date(remoteProfile.updatedAt)
           }
         });
@@ -391,6 +397,9 @@ export async function saveStoreProfile(data: any) {
         city: data.city,
         footer: data.footer,
         logoUrl: data.logoUrl || null,
+        debtEnabled: data.debtEnabled,
+        debtLimitPerPerson: data.debtLimitPerPerson,
+        debtLimitBehavior: data.debtLimitBehavior,
         updatedAt: new Date()
       },
       create: {
@@ -401,6 +410,9 @@ export async function saveStoreProfile(data: any) {
         city: data.city,
         footer: data.footer,
         logoUrl: data.logoUrl || null,
+        debtEnabled: data.debtEnabled,
+        debtLimitPerPerson: data.debtLimitPerPerson,
+        debtLimitBehavior: data.debtLimitBehavior,
         updatedAt: new Date()
       }
     });

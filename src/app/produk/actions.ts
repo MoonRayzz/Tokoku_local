@@ -266,7 +266,7 @@ export async function importProductsCSV(csvData: string) {
             where: { id: existing.id },
             data: {
               name,
-              hargaBeli,
+              priceBuy: hargaBeli,
               priceRetail,
               priceWholesale,
               wholesaleMinQty,
@@ -289,7 +289,7 @@ export async function importProductsCSV(csvData: string) {
             data: {
               sku,
               name,
-              hargaBeli,
+              priceBuy: hargaBeli,
               priceRetail,
               priceWholesale,
               wholesaleMinQty,

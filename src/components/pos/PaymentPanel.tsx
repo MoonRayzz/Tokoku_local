@@ -7,6 +7,7 @@ import { MethodSelector } from './MethodSelector';
 import { CashForm } from './CashForm';
 import { QrisPanel } from './QrisPanel';
 import { DebitForm } from './DebitForm';
+import { UtangForm } from './UtangForm';
 import { PaymentSuccess } from './PaymentSuccess';
 
 interface PaymentPanelProps {
@@ -52,6 +53,7 @@ export function PaymentPanel({
     confirmCash,
     confirmQris,
     confirmDebit,
+    confirmUtang,
     reset,
   } = usePayment({
     total,
@@ -74,7 +76,7 @@ export function PaymentPanel({
   };
 
   // Derived: state saat ini sebagai PaymentMethod atau null
-  const selectedMethod = (state === 'cash' || state === 'qris' || state === 'debit')
+  const selectedMethod = (state === 'cash' || state === 'qris' || state === 'debit' || state === 'utang')
     ? state as PaymentMethod
     : null;
 
@@ -169,6 +171,19 @@ export function PaymentPanel({
                 isLoading={isLoading}
                 error={error}
                 onConfirm={confirmDebit}
+              />
+            )}
+
+            {/* Utang form */}
+            {state === 'utang' && (
+              <UtangForm
+                totalAmount={total}
+                onConfirm={confirmUtang}
+                isLoading={isLoading}
+                error={error}
+                storeProfile={storeProfile}
+                memberId={memberId}
+                memberName={memberName}
               />
             )}
           </>
