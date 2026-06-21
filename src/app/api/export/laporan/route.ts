@@ -39,11 +39,19 @@ export async function GET(req: NextRequest) {
         createdAt: { gte: currentStart, lt: currentEnd },
         ...(shiftStr ? { shiftId: shiftStr } : {})
       },
-      include: {
-        member: true,
+      select: {
+        createdAt: true,
+        receiptNumber: true,
+        cashierName: true,
+        paymentMethod: true,
+        totalAmount: true,
+        isVoid: true,
+        member: { select: { name: true } },
         details: {
-          include: {
-            product: true
+          select: {
+            quantity: true,
+            priceAtTime: true,
+            product: { select: { name: true } }
           }
         }
       },
@@ -73,8 +81,12 @@ export async function GET(req: NextRequest) {
         date: { gte: currentStart, lt: currentEnd },
         ...(shiftStr ? { shiftId: shiftStr } : {})
       },
-      include: {
-        employee: true
+      select: {
+        date: true,
+        category: true,
+        amount: true,
+        notes: true,
+        employee: { select: { name: true } }
       },
       orderBy: {
         date: 'desc'

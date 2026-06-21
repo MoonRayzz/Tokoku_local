@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/Toast';
 import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 import { useSync } from '@/context/SyncContext';
+import Pagination from '@/components/ui/Pagination';
 
 interface Expense {
   id: string;
@@ -20,6 +21,10 @@ interface Expense {
 
 interface ExpenseManagerProps {
   expenses: Expense[];
+  totalPages: number;
+  totalCount: number;
+  currentPage: number;
+  limit: number;
 }
 
 const CATEGORIES = [
@@ -30,7 +35,7 @@ const CATEGORIES = [
   'LAINNYA'
 ];
 
-export default function ExpenseManager({ expenses }: ExpenseManagerProps) {
+export default function ExpenseManager({ expenses, totalPages, totalCount, currentPage, limit }: ExpenseManagerProps) {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const { triggerSync } = useSync();
@@ -176,6 +181,12 @@ export default function ExpenseManager({ expenses }: ExpenseManagerProps) {
                 </tbody>
               </table>
             </div>
+            <Pagination 
+              totalPages={totalPages} 
+              totalItems={totalCount} 
+              currentPage={currentPage} 
+              pageSize={limit} 
+            />
           </div>
         </div>
 

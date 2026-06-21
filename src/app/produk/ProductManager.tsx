@@ -4,9 +4,12 @@
 import React, { useState, useTransition, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import Link from 'next/link';
-import { addProduct, deleteProduct, restockProduct, importProductsCSV } from './actions';
+import { addProduct, deleteProduct, restockProduct, importProductsCSV, getProductBySku } from './actions';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useDebounce } from 'use-debounce';
+import Pagination from '@/components/ui/Pagination';
 
 // Mendefinisikan tipe data yang turun dari Prisma Database
 type Product = {
@@ -24,11 +27,41 @@ type Product = {
 
 interface ProductManagerProps {
   initialProducts: Product[];
+  totalPages: number;
+  totalCount: number;
+  currentPage: number;
+  limit: number;
+  initialSearch: string;
 }
 
-export default function ProductManager({ initialProducts }: ProductManagerProps) {
+export default function ProductManager({ initialProducts, totalPages, totalCount, currentPage, limit, initialSearch }: ProductManagerProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [debouncedSearch] = useDebounce(searchQuery, 500);
+  
+  // Sync search query to URL
+  useEffect(() => {
+    const currentQuery = searchParams.toString();
+    const params = new URLSearchParams(currentQuery);
+    
+    if (debouncedSearch) {
+      params.set('search', debouncedSearch);
+      if (debouncedSearch !== initialSearch) params.set('page', '1');
+    } else {
+      params.delete('search');
+      if (debouncedSearch !== initialSearch) params.set('page', '1');
+    }
+    
+    const newQuery = params.toString();
+    if (currentQuery !== newQuery) {
+      router.replace(`${pathname}?${newQuery}`, { scroll: false });
+    }
+  }, [debouncedSearch, pathname, router, searchParams, initialSearch]);
+
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState('');
   
@@ -64,8 +97,8 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
         return;
       }
       
-      // 1. Cek DB Lokal (Smart Restock)
-      const found = initialProducts.find(p => p.sku === sku);
+      // 1. Cek DB Lokal lewat action getProductBySku (Smart Restock)
+      const found = await getProductBySku(sku);
       if (found) {
         setExistingProduct(found);
         if (formRef.current) {
@@ -111,11 +144,8 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka);
   };
 
-  // Filter pencarian reaktif (tanpa loading database)
-  const filteredProducts = initialProducts.filter(product => 
-    product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    product.sku.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter pencarian reaktif sudah ditangani via searchParams server-side
+  const filteredProducts = initialProducts;
 
   // Fungsi Action Form (Disesuaikan untuk Next.js Server Actions)
   const clientAction = (formData: FormData) => {
@@ -397,6 +427,12 @@ export default function ProductManager({ initialProducts }: ProductManagerProps)
             )}
           </tbody>
         </table>
+        <Pagination 
+          totalPages={totalPages} 
+          totalItems={totalCount} 
+          currentPage={currentPage} 
+          pageSize={limit} 
+        />
       </div>
 
       {/* Modal Tambah Produk Overlay */}

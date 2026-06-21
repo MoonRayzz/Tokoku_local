@@ -3,24 +3,33 @@
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/db';
 
-export async function getExpenses() {
+export async function getExpenses(page: number = 1, limit: number = 20) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  return await prisma.expense.findMany({
-    where: {
-      date: {
-        gte: today,
+  const whereClause = {
+    date: {
+      gte: today,
+    },
+  };
+
+  const [expenses, totalCount] = await Promise.all([
+    prisma.expense.findMany({
+      where: whereClause,
+      include: {
+        employee: true,
+        shift: true,
       },
-    },
-    include: {
-      employee: true,
-      shift: true,
-    },
-    orderBy: {
-      date: 'desc',
-    },
-  });
+      orderBy: {
+        date: 'desc',
+      },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.expense.count({ where: whereClause })
+  ]);
+
+  return { expenses, totalCount };
 }
 
 export async function addExpense(formData: FormData) {

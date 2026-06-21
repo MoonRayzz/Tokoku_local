@@ -4,6 +4,18 @@
 import prisma from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
+export async function getProductBySku(sku: string) {
+  try {
+    const product = await prisma.product.findUnique({
+      where: { sku }
+    });
+    return product;
+  } catch (error) {
+    console.error('Error fetching product by sku:', error);
+    return null;
+  }
+}
+
 export async function addProduct(formData: FormData) {
   try {
     const name = formData.get('name') as string;

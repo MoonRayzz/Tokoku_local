@@ -35,7 +35,7 @@ interface PosClientProps {
   products: Product[];
   members: Member[];
   tiers: MemberTier[];
-  memberStats: Record<string, { txCount: number, totalSpent: number }>;
+  memberStats: Record<string, { txCount: number, totalSpent: number, lastTxDate: string | null }>;
   employees: Employee[];
   shifts: Shift[];
   storeProfile: any;
@@ -454,17 +454,36 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
               </div>
             )}
           </div>
-          {selectedMember && (
-            <div className={`shrink-0 flex items-center gap-3 px-3 py-2 rounded border w-full sm:w-auto ${getMemberTierUI(selectedMember.id).color}`}>
-              <span className="material-symbols-outlined text-[20px]">workspace_premium</span>
-              <div className="flex flex-col">
-                <span className="text-[10px] uppercase tracking-wider opacity-80">Level Member</span>
-                <span className="text-sm font-bold">
-                  {getMemberTierUI(selectedMember.id).label} ({memberStats[selectedMember.id]?.txCount || 0} Trx)
-                </span>
+          {selectedMember && (() => {
+            const stats = memberStats[selectedMember.id] || { txCount: 0, totalSpent: 0, lastTxDate: null };
+            let daysText = 'Belum pernah';
+            if (stats.lastTxDate) {
+              const diffMs = new Date().getTime() - new Date(stats.lastTxDate).getTime();
+              const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+              if (diffDays === 0) daysText = 'Hari ini';
+              else daysText = `${diffDays} hari lalu`;
+            }
+
+            return (
+              <div className="flex flex-col gap-2 w-full sm:w-auto">
+                <div className={`shrink-0 flex items-center gap-3 px-3 py-2 rounded border w-full sm:w-auto ${getMemberTierUI(selectedMember.id).color}`}>
+                  <span className="material-symbols-outlined text-[20px]">workspace_premium</span>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider opacity-80">Level Member</span>
+                    <span className="text-sm font-bold">
+                      {getMemberTierUI(selectedMember.id).label}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Tooltip Info Member */}
+                <div className="text-[11px] text-text-secondary bg-surface-container-high px-2.5 py-1.5 rounded flex items-center gap-1.5 border border-border">
+                  <span className="material-symbols-outlined text-[12px]">info</span>
+                  Terakhir belanja: {daysText} | Total transaksi: {stats.txCount}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* Tabel Keranjang */}

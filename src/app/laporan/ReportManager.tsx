@@ -328,7 +328,7 @@ export default function ReportManager({ data, shifts }: { data: ReportData, shif
         {/* Top Sellers List */}
         <div className="bg-surface border border-border rounded-lg p-0 flex flex-col max-h-[400px]">
           <div className="p-6 border-b border-border flex justify-between items-center shrink-0">
-            <h3 className="font-headline-sm text-headline-sm text-text-primary">Produk Terlaris</h3>
+            <h3 className="font-headline-sm text-headline-sm text-text-primary">Produk Terjual (Shift Ini)</h3>
           </div>
           <div className="flex-1 overflow-y-auto">
             <div className="flex flex-col">

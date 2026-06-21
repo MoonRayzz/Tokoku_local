@@ -50,44 +50,70 @@ export default async function LaporanPage(props: Props) {
   
   const previousEnd = new Date(currentStart);
 
-  // 2. Query Transaksi Saat Ini (Abaikan transaksi yang berstatus Void/Batal)
-  const currentTx = await prisma.transaction.findMany({
-    where: {
-      createdAt: { gte: currentStart, lt: currentEnd },
-      isVoid: false,
-      ...(params?.shift ? { shiftId: params.shift } : {})
-    },
-    include: { 
-      details: { include: { product: true } } 
-    }
-  });
+  const txFilter = {
+    createdAt: { gte: currentStart, lt: currentEnd },
+    isVoid: false,
+    ...(params?.shift ? { shiftId: params.shift } : {})
+  };
 
-  const currentExpenses = await prisma.expense.findMany({
-    where: {
-      date: { gte: currentStart, lt: currentEnd },
-      ...(params?.shift ? { shiftId: params.shift } : {})
-    }
-  });
+  const prevTxFilter = {
+    createdAt: { gte: previousStart, lt: previousEnd },
+    isVoid: false,
+    ...(params?.shift ? { shiftId: params.shift } : {})
+  };
 
-  // 3. Query Transaksi Sebelumnya (Untuk metrik pertumbuhan %)
-  const previousTx = await prisma.transaction.findMany({
-    where: {
-      createdAt: { gte: previousStart, lt: previousEnd },
-      isVoid: false,
-      ...(params?.shift ? { shiftId: params.shift } : {})
-    }
-  });
+  const expenseFilter = {
+    date: { gte: currentStart, lt: currentEnd },
+    ...(params?.shift ? { shiftId: params.shift } : {})
+  };
+
+  // Gunakan Promise.all untuk paralel eksekusi agregasi
+  const [
+    currentTxAgg,
+    prevTxAgg,
+    expenseAgg,
+    hourlyTxData,
+    topSellersRaw
+  ] = await Promise.all([
+    prisma.transaction.aggregate({
+      where: txFilter,
+      _sum: { totalAmount: true },
+      _count: { id: true }
+    }),
+    prisma.transaction.aggregate({
+      where: prevTxFilter,
+      _sum: { totalAmount: true },
+      _count: { id: true }
+    }),
+    prisma.expense.aggregate({
+      where: expenseFilter,
+      _sum: { amount: true }
+    }),
+    // Fetch minimal untuk grafik per jam
+    prisma.transaction.findMany({
+      where: txFilter,
+      select: { createdAt: true, totalAmount: true }
+    }),
+    // Fetch minimal untuk top sellers
+    prisma.transactionDetail.groupBy({
+      by: ['productId'],
+      where: { transaction: txFilter },
+      _sum: { quantity: true, subtotal: true },
+      orderBy: { _sum: { quantity: 'desc' } },
+      take: 10
+    })
+  ]);
 
   // 4. Kalkulasi KPI Utama
-  const totalSales = currentTx.reduce((sum, tx) => sum + tx.totalAmount, 0);
-  const txCount = currentTx.length;
+  const totalSales = currentTxAgg._sum.totalAmount || 0;
+  const txCount = currentTxAgg._count.id;
   const avgOrder = txCount > 0 ? totalSales / txCount : 0;
   
-  const totalExpense = currentExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const totalExpense = expenseAgg._sum.amount || 0;
   const netBalance = totalSales - totalExpense;
 
-  const yTotalSales = previousTx.reduce((sum, tx) => sum + tx.totalAmount, 0);
-  const yTxCount = previousTx.length;
+  const yTotalSales = prevTxAgg._sum.totalAmount || 0;
+  const yTxCount = prevTxAgg._count.id;
   const yAvgOrder = yTxCount > 0 ? yTotalSales / yTxCount : 0;
 
   // 5. Kalkulasi Pertumbuhan (%)
@@ -101,33 +127,24 @@ export default async function LaporanPage(props: Props) {
   const txGrowth = calcGrowth(txCount, yTxCount);
   const avgGrowth = calcGrowth(avgOrder, yAvgOrder);
 
-  // 6. Kalkulasi Produk Terlaris Hari Ini
-  const productSalesMap: Record<string, { name: string, sku: string, qty: number, revenue: number }> = {};
-  
-  currentTx.forEach(tx => {
-    tx.details.forEach(detail => {
-      if (!productSalesMap[detail.productId]) {
-        productSalesMap[detail.productId] = { 
-          name: detail.product.name, 
-          sku: detail.product.sku, 
-          qty: 0, 
-          revenue: 0 
-        };
-      }
-      productSalesMap[detail.productId].qty += detail.quantity;
-      productSalesMap[detail.productId].revenue += detail.subtotal;
-    });
+  // 6. Lengkapi data produk untuk topSellers
+  const productIds = topSellersRaw.map(t => t.productId);
+  const productsData = await prisma.product.findMany({
+    where: { id: { in: productIds } },
+    select: { id: true, name: true, sku: true }
   });
+  
+  const productMap = Object.fromEntries(productsData.map(p => [p.id, p]));
+  const topSellers = topSellersRaw.map(item => ({
+    name: productMap[item.productId]?.name || 'Unknown',
+    sku: productMap[item.productId]?.sku || '-',
+    qty: item._sum.quantity || 0,
+    revenue: item._sum.subtotal || 0
+  }));
 
-  // Urutkan berdasarkan kuantitas terbanyak dan ambil Top 5
-  const topSellers = Object.values(productSalesMap)
-    .sort((a, b) => b.qty - a.qty)
-    .slice(0, 5);
-
-  // 7. Kalkulasi Pendapatan Per Jam (Hanya relevan jika filter 1 hari)
-  // Jika rentang lebih dari 1 hari, chart 24 jam kurang relevan, namun kita biarkan memetakan per jam dari semua hari
+  // 7. Kalkulasi Pendapatan Per Jam
   const hourlySales = Array(24).fill(0);
-  currentTx.forEach(tx => {
+  hourlyTxData.forEach(tx => {
     const hour = new Date(tx.createdAt).getHours();
     hourlySales[hour] += tx.totalAmount;
   });

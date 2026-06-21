@@ -48,6 +48,13 @@ model Transaction {
   member         Member?             @relation(fields: [memberId], references: [id])
   details        TransactionDetail[]
   VoidLog        VoidLog?
+
+  @@index([createdAt])
+  @@index([isVoid])
+  @@index([shiftId])
+  @@index([memberId])
+  @@index([createdAt, isVoid])
+  @@index([createdAt, cashierName])
 }
 
 model TransactionDetail {
@@ -60,6 +67,9 @@ model TransactionDetail {
   subtotal       Float
   transaction    Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   product        Product     @relation(fields: [productId], references: [id])
+
+  @@index([transactionId])
+  @@index([productId])
 }
 
 model MemberTier {
@@ -85,6 +95,9 @@ model SyncQueue {
   retryCount   Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Employee {
@@ -127,6 +140,10 @@ model Attendance {
   createdAt   DateTime  @default(now())
   employee    Employee  @relation(fields: [employeeId], references: [id])
   shift       Shift?    @relation(fields: [shiftId], references: [id])
+
+  @@index([date])
+  @@index([employeeId])
+  @@index([shiftId])
 }
 
 model StoreStatus {
@@ -162,6 +179,10 @@ model Expense {
   updatedAt   DateTime @updatedAt
   employee    Employee @relation(fields: [employeeId], references: [id])
   shift       Shift?   @relation(fields: [shiftId], references: [id])
+
+  @@index([date])
+  @@index([syncStatus])
+  @@index([employeeId])
 }
 
 model Supplier {
@@ -186,6 +207,10 @@ model PurchaseOrder {
   updatedAt   DateTime @updatedAt
   supplier    Supplier? @relation(fields: [supplierId], references: [id])
   items       PoItem[]
+
+  @@index([date])
+  @@index([syncStatus])
+  @@index([supplierId])
 }
 
 model PoItem {
@@ -197,6 +222,9 @@ model PoItem {
   subtotal        Float
   purchaseOrder   PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
   product         Product       @relation(fields: [productId], references: [id])
+
+  @@index([poId])
+  @@index([productId])
 }
 
 model StockLog {
@@ -212,6 +240,10 @@ model StockLog {
   date        DateTime @default(now())
   syncStatus  String   @default("PENDING")
   product     Product  @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@index([date])
+  @@index([syncStatus])
 }
 
 model VoidLog {
@@ -223,4 +255,7 @@ model VoidLog {
   date          DateTime    @default(now())
   syncStatus    String      @default("PENDING")
   transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  @@index([date])
+  @@index([syncStatus])
 }

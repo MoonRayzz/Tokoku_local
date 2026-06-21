@@ -39,6 +39,18 @@ interface TransactionManagerProps {
   initialTransactions: TransactionData[];
   shifts: { id: string; name: string }[];
   storeProfile?: any;
+  dbSummary: {
+    cash: number;
+    qris: number;
+    debit: number;
+    grand: number;
+  };
+  totalPages: number;
+  totalCount: number;
+  currentPage: number;
+  limit: number;
+  initialSearch: string;
+  initialMethod: MethodFilter;
 }
 
 type MethodFilter = 'all' | 'cash' | 'qris' | 'debit';
@@ -50,9 +62,58 @@ const formatDate = (d: Date) =>
 const formatTime = (d: Date) =>
   new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
-export default function TransactionManager({ initialTransactions, shifts, storeProfile }: TransactionManagerProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [methodFilter, setMethodFilter] = useState<MethodFilter>('all');
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useDebounce } from 'use-debounce';
+import Pagination from '@/components/ui/Pagination';
+
+export default function TransactionManager({ 
+  initialTransactions, 
+  shifts, 
+  storeProfile,
+  dbSummary,
+  totalPages,
+  totalCount,
+  currentPage,
+  limit,
+  initialSearch,
+  initialMethod
+}: TransactionManagerProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [debouncedSearch] = useDebounce(searchQuery, 500);
+  const [methodFilter, setMethodFilter] = useState<MethodFilter>(initialMethod);
+
+  // Sync search query and method to URL
+  React.useEffect(() => {
+    const currentQuery = searchParams.toString();
+    const params = new URLSearchParams(currentQuery);
+    
+    if (debouncedSearch) {
+      params.set('search', debouncedSearch);
+    } else {
+      params.delete('search');
+    }
+    
+    if (methodFilter !== 'all') {
+      params.set('method', methodFilter);
+    } else {
+      params.delete('method');
+    }
+    
+    // Reset ke halaman 1 jika filter berubah
+    if (debouncedSearch !== initialSearch || methodFilter !== initialMethod) {
+      params.set('page', '1');
+    }
+
+    const newQuery = params.toString();
+    if (currentQuery !== newQuery) {
+      router.replace(`${pathname}?${newQuery}`, { scroll: false });
+    }
+  }, [debouncedSearch, methodFilter, pathname, router, searchParams, initialSearch, initialMethod]);
+
   const [selectedTx, setSelectedTx] = useState<TransactionData | null>(null);
   const [voidModalOpen, setVoidModalOpen] = useState(false);
   const [pin, setPin] = useState('');
@@ -86,29 +147,11 @@ export default function TransactionManager({ initialTransactions, shifts, storeP
     }
   }, []);
 
-  // ── Filtered transactions ──
-  const filteredTx = useMemo(() => {
-    return initialTransactions.filter((tx) => {
-      const matchesSearch =
-        tx.receiptNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (tx.member?.name.toLowerCase() || '').includes(searchQuery.toLowerCase());
-      const matchesMethod = methodFilter === 'all' || tx.paymentMethod === methodFilter;
-      return matchesSearch && matchesMethod;
-    });
-  }, [initialTransactions, searchQuery, methodFilter]);
+  // ── Filtered transactions (Sekarang diambil langsung dari server) ──
+  const filteredTx = initialTransactions;
 
   // ── Closing summary per metode ──
-  const summary = useMemo(() => {
-    const active = initialTransactions.filter((tx) => !tx.isVoid);
-    const byMethod = (m: string) =>
-      active.filter((tx) => tx.paymentMethod === m).reduce((s, tx) => s + tx.totalAmount, 0);
-    return {
-      cash: byMethod('cash'),
-      qris: byMethod('qris'),
-      debit: byMethod('debit'),
-      grand: active.reduce((s, tx) => s + tx.totalAmount, 0),
-    };
-  }, [initialTransactions]);
+  const summary = dbSummary;
 
   // ── Void handler ──
   const handleVoidSubmit = (e: React.FormEvent) => {
@@ -314,6 +357,12 @@ export default function TransactionManager({ initialTransactions, shifts, storeP
             )}
           </tbody>
         </table>
+        <Pagination 
+          totalPages={totalPages} 
+          totalItems={totalCount} 
+          currentPage={currentPage} 
+          pageSize={limit} 
+        />
       </div>
 
       {/* ── Modal Struk ── */}
