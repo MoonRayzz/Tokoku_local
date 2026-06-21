@@ -35,6 +35,22 @@ export default async function PengeluaranPage({
 
   const totalPages = Math.ceil(totalCount / limit);
 
+  // Ambil daftar karyawan yang sedang absen masuk (checkOut masih null)
+  const activeAttendances = await prisma.attendance.findMany({
+    where: { checkOut: null },
+    include: { employee: true },
+    orderBy: { checkIn: 'desc' }
+  });
+  
+  // Ekstrak data employee saja, hapus duplikat jika ada (meski jarang)
+  const activeEmployees = Array.from(new Map(activeAttendances.map(a => [a.employee.id, a.employee])).values());
+
+  // Ambil daftar shift (sesi) yang aktif
+  const activeShifts = await prisma.shift.findMany({
+    where: { isActive: true },
+    orderBy: { createdAt: 'desc' }
+  });
+
   return (
     <ExpenseManager 
       expenses={expensesWithSyncStatus as any} 
@@ -42,6 +58,8 @@ export default async function PengeluaranPage({
       totalCount={totalCount}
       currentPage={page}
       limit={limit}
+      activeEmployees={activeEmployees}
+      activeShifts={activeShifts}
     />
   );
 }

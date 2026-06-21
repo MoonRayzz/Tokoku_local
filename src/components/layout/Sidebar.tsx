@@ -46,9 +46,9 @@ export function Sidebar() {
             </span>
           )}
         </div>
-        <div className="flex flex-col ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-          <span className="text-[18px] font-bold text-primary leading-tight">{storeName}</span>
-          <span className="text-[11px] font-semibold text-text-secondary tracking-wide">Terminal 01</span>
+        <div className="flex flex-col ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 min-w-0 pr-2">
+          <span className="text-base font-bold text-primary leading-tight break-words whitespace-normal line-clamp-2">{storeName}</span>
+          <span className="text-[11px] font-semibold text-text-secondary tracking-wide mt-0.5">Terminal 01</span>
         </div>
       </div>
 

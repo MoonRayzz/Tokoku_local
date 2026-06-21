@@ -29,6 +29,7 @@ model Member {
   name        String
   joinedAt    DateTime      @default(now())
   Transaction Transaction[]
+  Debt        Debt[]
 }
 
 model Transaction {
@@ -48,6 +49,7 @@ model Transaction {
   member         Member?             @relation(fields: [memberId], references: [id])
   details        TransactionDetail[]
   VoidLog        VoidLog?
+  debt           Debt?
 
   @@index([createdAt])
   @@index([isVoid])
@@ -164,6 +166,9 @@ model StoreProfile {
   longitude Float?
   radius    Int      @default(50)
   voidPin   String   @default("123456")
+  debtEnabled         Boolean  @default(true)
+  debtLimitPerPerson  Float    @default(500000)
+  debtLimitBehavior   String   @default("WARN")
   updatedAt DateTime @updatedAt
 }
 model Expense {
@@ -257,5 +262,50 @@ model VoidLog {
   transaction   Transaction @relation(fields: [transactionId], references: [id])
 
   @@index([date])
+  @@index([syncStatus])
+}
+
+model Debt {
+  id            String        @id @default(uuid())
+  transactionId String        @unique
+  debtorName    String
+  debtorPhone   String?
+  debtorNotes   String?
+  memberId      String?
+  totalAmount   Float
+  paidAmount    Float         @default(0)
+  remaining     Float
+  status        String        @default("UNPAID") // UNPAID, PARTIAL, PAID
+  kasirId       String
+  isLimitOverride Boolean     @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  syncStatus    String        @default("PENDING")
+  
+  transaction   Transaction   @relation(fields: [transactionId], references: [id])
+  member        Member?       @relation(fields: [memberId], references: [id])
+  payments      DebtPayment[]
+
+  @@index([status])
+  @@index([debtorName])
+  @@index([debtorPhone])
+  @@index([kasirId])
+  @@index([createdAt])
+  @@index([syncStatus])
+}
+
+model DebtPayment {
+  id         String   @id @default(uuid())
+  debtId     String
+  amount     Float
+  kasirId    String
+  notes      String?
+  paidAt     DateTime @default(now())
+  syncStatus String   @default("PENDING")
+  
+  debt       Debt     @relation(fields: [debtId], references: [id])
+
+  @@index([debtId])
+  @@index([paidAt])
   @@index([syncStatus])
 }

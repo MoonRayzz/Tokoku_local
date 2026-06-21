@@ -16,6 +16,7 @@ interface Expense {
   notes: string | null;
   employeeId: string;
   employee?: { name: string };
+  shift?: { name: string };
   syncStatus: string;
 }
 
@@ -25,6 +26,8 @@ interface ExpenseManagerProps {
   totalCount: number;
   currentPage: number;
   limit: number;
+  activeEmployees: { id: string, name: string }[];
+  activeShifts: { id: string, name: string }[];
 }
 
 const CATEGORIES = [
@@ -35,7 +38,7 @@ const CATEGORIES = [
   'LAINNYA'
 ];
 
-export default function ExpenseManager({ expenses, totalPages, totalCount, currentPage, limit }: ExpenseManagerProps) {
+export default function ExpenseManager({ expenses, totalPages, totalCount, currentPage, limit, activeEmployees, activeShifts }: ExpenseManagerProps) {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const { triggerSync } = useSync();
@@ -60,13 +63,13 @@ export default function ExpenseManager({ expenses, totalPages, totalCount, curre
   const totalExpense = expenses.reduce((acc, curr) => acc + curr.amount, 0);
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8 space-y-6 w-full">
       <div>
         <h2 className="text-2xl font-bold text-text-primary">Pengeluaran Operasional</h2>
         <p className="text-sm text-text-secondary mt-1">Catat dan kelola kas keluar harian (selain pembelian stok)</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         
         {/* Form Input */}
         <div className="lg:col-span-1">
@@ -104,6 +107,40 @@ export default function ExpenseManager({ expenses, totalPages, totalCount, curre
               </div>
 
               <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-text-secondary uppercase">Karyawan (Kasir)</label>
+                <select 
+                  name="employeeId" 
+                  required
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-text-primary outline-none focus:border-primary-container"
+                >
+                  {activeEmployees.length === 0 ? (
+                    <option value="">Belum ada karyawan absen</option>
+                  ) : (
+                    activeEmployees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name}</option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-text-secondary uppercase">Sesi / Shift</label>
+                <select 
+                  name="shiftId" 
+                  required
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-text-primary outline-none focus:border-primary-container"
+                >
+                  {activeShifts.length === 0 ? (
+                    <option value="">Belum ada sesi aktif</option>
+                  ) : (
+                    activeShifts.map(shift => (
+                      <option key={shift.id} value={shift.id}>{shift.name}</option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-text-secondary uppercase">Keterangan / Catatan</label>
                 <textarea 
                   name="notes" 
@@ -125,7 +162,7 @@ export default function ExpenseManager({ expenses, totalPages, totalCount, curre
         </div>
 
         {/* Tabel Riwayat */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-3">
           <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm flex flex-col h-full">
             <div className="p-5 border-b border-border flex justify-between items-center bg-surface-container-high/30">
               <h3 className="font-semibold text-text-primary">Riwayat Hari Ini</h3>
@@ -136,12 +173,14 @@ export default function ExpenseManager({ expenses, totalPages, totalCount, curre
             </div>
 
             <div className="flex-1 overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[500px]">
+              <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-surface-container-high border-b border-border">
                     <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Waktu</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Kategori</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Keterangan</th>
+                    <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Karyawan</th>
+                    <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Sesi</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider text-right">Nominal</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-text-secondary uppercase tracking-wider text-center">Status</th>
                   </tr>
@@ -149,7 +188,7 @@ export default function ExpenseManager({ expenses, totalPages, totalCount, curre
                 <tbody className="divide-y divide-border">
                   {expenses.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-5 py-8 text-center text-text-secondary">Belum ada pengeluaran hari ini.</td>
+                      <td colSpan={7} className="px-5 py-8 text-center text-text-secondary">Belum ada pengeluaran hari ini.</td>
                     </tr>
                   ) : (
                     expenses.map(exp => (
@@ -164,6 +203,12 @@ export default function ExpenseManager({ expenses, totalPages, totalCount, curre
                         </td>
                         <td className="px-5 py-3 text-sm text-text-secondary max-w-[150px] truncate">
                           {exp.notes || '-'}
+                        </td>
+                        <td className="px-5 py-3 text-sm text-text-primary">
+                          {exp.employee?.name || '-'}
+                        </td>
+                        <td className="px-5 py-3 text-sm text-text-primary">
+                          {exp.shift?.name || '-'}
                         </td>
                         <td className="px-5 py-3 text-sm text-right font-semibold text-error">
                           - Rp {exp.amount.toLocaleString('id-ID')}

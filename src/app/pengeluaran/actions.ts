@@ -38,27 +38,12 @@ export async function addExpense(formData: FormData) {
     const amount = parseFloat(formData.get('amount') as string);
     const notes = formData.get('notes') as string | null;
 
-    if (!category || !amount || isNaN(amount) || amount <= 0) {
-      return { success: false, error: 'Data pengeluaran tidak valid.' };
-    }
+    const employeeId = formData.get('employeeId') as string;
+    const shiftId = formData.get('shiftId') as string;
 
-    // Karena belum ada sistem login, kita ambil atau buat employee dummy
-    let employee = await prisma.employee.findFirst();
-    if (!employee) {
-      employee = await prisma.employee.create({
-        data: {
-          name: 'Admin',
-          role: 'kasir',
-          isActive: true,
-        }
-      });
+    if (!category || !amount || isNaN(amount) || amount <= 0 || !employeeId || !shiftId) {
+      return { success: false, error: 'Semua field (Kategori, Nominal, Karyawan, Sesi) wajib diisi.' };
     }
-
-    // Ambil shift aktif (jika ada)
-    const activeShift = await prisma.shift.findFirst({
-      where: { isActive: true },
-      orderBy: { createdAt: 'desc' }
-    });
 
     const expense = await prisma.$transaction(async (tx) => {
       // 1. Simpan pengeluaran
@@ -67,8 +52,8 @@ export async function addExpense(formData: FormData) {
           category,
           amount,
           notes,
-          employeeId: employee.id,
-          shiftId: activeShift?.id || null,
+          employeeId: employeeId,
+          shiftId: shiftId,
           syncStatus: 'PENDING',
         }
       });
