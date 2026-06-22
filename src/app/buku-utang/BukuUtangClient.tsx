@@ -3,7 +3,6 @@
 import React, { useState, useRef } from 'react';
 import { processDebtPayment } from './actions';
 import { DebtPaymentReceipt } from '@/components/pos/DebtPaymentReceipt';
-import { useReactToPrint } from 'react-to-print';
 
 const formatRp = (num: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num);
@@ -22,11 +21,6 @@ export default function BukuUtangClient({ initialDebts, employees, storeProfile 
 
   // Printing
   const [paymentToPrint, setPaymentToPrint] = useState<any>(null);
-  const receiptRef = useRef<HTMLDivElement>(null);
-  const handlePrint = useReactToPrint({
-    contentRef: receiptRef,
-    onAfterPrint: () => setPaymentToPrint(null),
-  });
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,19 +57,16 @@ export default function BukuUtangClient({ initialDebts, employees, storeProfile 
       );
       setDebts(updatedList);
       
-      // Set to print
-      setPaymentToPrint({
-        ...res.data!.payment,
-        debt: {
+      if (res.data!.updatedDebt.status === 'PAID') {
+        setPaymentToPrint({
           debtorName: selectedDebt.debtorName,
           transaction: selectedDebt.transaction,
           totalAmount: selectedDebt.totalAmount,
-          remaining: res.data!.updatedDebt.remaining
-        }
-      });
-      setTimeout(() => {
-        handlePrint();
-      }, 500);
+          remaining: res.data!.updatedDebt.remaining,
+          paidAmount: res.data!.updatedDebt.paidAmount,
+          payments: [res.data!.payment, ...(selectedDebt.payments || [])]
+        });
+      }
 
       setSelectedDebt(null);
       setAmount('');
@@ -151,7 +142,14 @@ export default function BukuUtangClient({ initialDebts, employees, storeProfile 
               </thead>
               <tbody className="divide-y divide-border">
                 {filteredDebts.map((d: any) => (
-                  <tr key={d.id} className="hover:bg-surface-container-high transition-colors">
+                  <tr 
+                    key={d.id} 
+                    onClick={() => {
+                      setSelectedDebt(d);
+                      setAmount(d.remaining);
+                    }}
+                    className={`hover:bg-surface-container-high transition-colors cursor-pointer ${selectedDebt?.id === d.id ? 'bg-surface-container-highest' : ''}`}
+                  >
                     <td className="px-4 py-3 text-sm">{new Date(d.createdAt).toLocaleDateString('id-ID')}</td>
                     <td className="px-4 py-3 font-medium">
                       {d.debtorName}
@@ -169,16 +167,29 @@ export default function BukuUtangClient({ initialDebts, employees, storeProfile 
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button 
-                        onClick={() => {
-                          setSelectedDebt(d);
-                          setAmount(d.remaining);
-                        }}
-                        disabled={d.status === 'PAID'}
-                        className="text-xs bg-primary-container text-on-primary-container px-3 py-1.5 rounded font-bold disabled:opacity-50 hover:bg-primary hover:text-on-primary transition-colors"
-                      >
-                        Bayar
-                      </button>
+                      {d.status === 'PAID' ? (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPaymentToPrint(d);
+                          }}
+                          className="text-xs bg-success text-on-primary-container px-3 py-1.5 rounded font-bold hover:brightness-110 transition-colors flex items-center justify-center gap-1 mx-auto"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">print</span>
+                          Cetak Struk
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDebt(d);
+                            setAmount(d.remaining);
+                          }}
+                          className="text-xs bg-primary-container text-on-primary-container px-3 py-1.5 rounded font-bold hover:bg-primary hover:text-on-primary transition-colors mx-auto"
+                        >
+                          Bayar
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -290,23 +301,38 @@ export default function BukuUtangClient({ initialDebts, employees, storeProfile 
       </div>
 
       {/* Hidden Thermal Print */}
-      <div className="hidden">
-        <div ref={receiptRef}>
-          {paymentToPrint && (
-            <DebtPaymentReceipt 
-              payment={paymentToPrint} 
-              storeConfig={{
-                name: storeProfile?.name || 'TokoKu',
-                address: storeProfile?.address || '-',
-                phone: storeProfile?.phone || '-',
-                city: storeProfile?.city || '-',
-                footer: storeProfile?.footer || 'Terima kasih',
-                logoUrl: storeProfile?.logoUrl
-              }}
-            />
-          )}
+      {/* Print Modal Overlay */}
+      {paymentToPrint && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm print:bg-white print:backdrop-blur-none">
+          <div className="relative print-area bg-white p-4 max-h-[90vh] overflow-y-auto rounded shadow-2xl flex flex-col font-mono text-sm leading-tight print:max-h-none print:overflow-visible print:shadow-none print:mx-auto">
+            <button 
+              onClick={() => setPaymentToPrint(null)}
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 print:hidden bg-gray-100 hover:bg-gray-200 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+            >
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+            <div className="w-[58mm] mx-auto bg-white text-black">
+              <DebtPaymentReceipt 
+                debt={paymentToPrint} 
+                storeConfig={{
+                  name: storeProfile?.name || 'TokoKu',
+                  address: storeProfile?.address || '-',
+                  phone: storeProfile?.phone || '-',
+                  city: storeProfile?.city || '-',
+                  footer: storeProfile?.footer || 'Terima kasih',
+                  logoUrl: storeProfile?.logoUrl
+                }}
+              />
+            </div>
+            <button 
+              onClick={() => window.print()}
+              className="mt-6 bg-primary hover:brightness-110 text-on-primary py-3 rounded print:hidden font-sans font-bold flex justify-center items-center gap-2 w-[58mm] mx-auto"
+            >
+              <span className="material-symbols-outlined">print</span> CETAK STRUK
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

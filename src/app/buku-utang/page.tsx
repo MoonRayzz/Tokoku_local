@@ -8,6 +8,11 @@ export default async function BukuUtangPage() {
   const storeProfile = await getStoreProfile();
 
   const debts = await prisma.debt.findMany({
+    where: {
+      transaction: {
+        isVoid: false
+      }
+    },
     orderBy: { createdAt: 'desc' },
     include: {
       transaction: true,
