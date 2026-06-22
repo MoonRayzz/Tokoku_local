@@ -118,6 +118,33 @@ model Employee {
   Attendance Attendance[]
   Expense    Expense[]
   SalaryPayout SalaryPayout[]
+  CashRegisterReport CashRegisterReport[]
+}
+
+model CashRegisterReport {
+  id            String   @id @default(uuid())
+  shiftId       String?
+  employeeId    String
+  startTime     DateTime
+  endTime       DateTime @default(now())
+  startingCash  Float
+  actualCash    Float
+  systemCash    Float
+  variance      Float
+  totalSales    Float
+  totalExpense  Float
+  notes         String?
+  status        String   @default("CLOSED")
+  syncStatus    String   @default("PENDING")
+  isVoid        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  employee      Employee @relation(fields: [employeeId], references: [id])
+  shift         Shift?   @relation(fields: [shiftId], references: [id])
+
+  @@index([syncStatus])
+  @@index([employeeId])
 }
 
 model Shift {
@@ -129,6 +156,7 @@ model Shift {
   createdAt  DateTime     @default(now())
   Attendance Attendance[]
   Expense    Expense[]
+  CashRegisterReport CashRegisterReport[]
 }
 
 model Attendance {

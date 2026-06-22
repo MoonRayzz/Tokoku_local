@@ -28,6 +28,7 @@ export function Sidebar() {
     { name: 'Buku Utang', href: '/buku-utang', icon: 'menu_book' },
     { name: 'Pengeluaran', href: '/pengeluaran', icon: 'account_balance_wallet' },
     { name: 'Member', href: '/member', icon: 'group' },
+    { name: 'Rekap Kasir', href: '/rekap-kasir', icon: 'calculate' },
     { name: 'Laporan', href: '/laporan', icon: 'analytics' },
     { name: 'Pengaturan', href: '/pengaturan', icon: 'settings' },
   ];
