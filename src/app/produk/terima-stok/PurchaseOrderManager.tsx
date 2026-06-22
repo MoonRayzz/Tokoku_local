@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createPurchaseOrder } from './actions';
-import { ArrowLeft, Plus, Trash2, Save, Search } from 'lucide-react';
+import { ArrowLeft, Trash2, Save, Search } from 'lucide-react';
 import { useSync } from '@/context/SyncContext';
+import { useToast } from '@/components/ui/Toast';
 
 export default function PurchaseOrderManager({ products }: { products: any[] }) {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function PurchaseOrderManager({ products }: { products: any[] }) 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const { triggerSync } = useSync();
+  const toast = useToast();
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -51,7 +53,10 @@ export default function PurchaseOrderManager({ products }: { products: any[] }) 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (items.length === 0) return alert('Pilih minimal 1 produk');
+    if (items.length === 0) {
+      toast.warning('Pilih minimal 1 produk');
+      return;
+    }
 
     setIsSubmitting(true);
     const result = await createPurchaseOrder({
@@ -69,11 +74,11 @@ export default function PurchaseOrderManager({ products }: { products: any[] }) 
     setIsSubmitting(false);
 
     if (result.success) {
-      alert('Purchase Order berhasil disimpan dan stok bertambah!');
+      toast.success('Purchase Order berhasil disimpan dan stok bertambah!');
       triggerSync(); // Trigger event-based sync
       router.push('/produk');
     } else {
-      alert(result.error);
+      toast.error(result.error || 'Terjadi kesalahan');
     }
   };
 

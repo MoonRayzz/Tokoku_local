@@ -56,10 +56,14 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const { triggerSync } = useSync();
   
-  // Cashier Session State
   const [activeSession, setActiveSession] = useState<{ cashierName: string, shiftId: string } | null>(null);
   const [selectedCashierId, setSelectedCashierId] = useState('');
   const [selectedShiftId, setSelectedShiftId] = useState('');
+  
+  // Offline Manual Mode
+  const [isManualMode, setIsManualMode] = useState(false);
+  const [manualCashierName, setManualCashierName] = useState('');
+  const [manualShiftName, setManualShiftName] = useState('');
 
   // Persist session across tabs
   useEffect(() => {
@@ -196,6 +200,29 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
   }));
 
   const handleStartSession = () => {
+    if (isManualMode) {
+      if (!manualCashierName.trim() || !manualShiftName.trim()) {
+        toast.warning("Silakan isi Nama Kasir dan Shift manual!");
+        return;
+      }
+      
+      const expiresAt = new Date();
+      expiresAt.setHours(23, 59, 59, 999); // Berlaku sampai akhir hari
+      
+      const sessionData = {
+        cashierId: 'manual',
+        cashierName: manualCashierName.trim(),
+        shiftId: manualShiftName.trim(),
+        shiftName: manualShiftName.trim(),
+        expiresAt: expiresAt.getTime()
+      };
+      
+      localStorage.setItem('pos_session', JSON.stringify(sessionData));
+      setActiveSession({ cashierName: sessionData.cashierName, shiftId: sessionData.shiftId });
+      setTimeout(() => searchInputRef.current?.focus(), 100);
+      return;
+    }
+
     if (!selectedCashierId || !selectedShiftId) {
       toast.warning("Silakan pilih Kasir dan Shift terlebih dahulu!");
       return;
@@ -296,29 +323,66 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
             </div>
 
             <div className="flex flex-col gap-4">
-              <div>
-                <label className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2 block">Nama Kasir</label>
-                <select 
-                  value={selectedCashierId} 
-                  onChange={(e) => setSelectedCashierId(e.target.value)}
-                  className="w-full bg-background border border-border rounded-lg h-11 px-3 text-text-primary focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none"
-                >
-                  <option value="">-- Pilih Kasir --</option>
-                  {employees.map(e => <option key={e.id} value={e.id}>{e.name} ({e.role})</option>)}
-                </select>
-              </div>
+              <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer w-fit">
+                <input 
+                  type="checkbox" 
+                  checked={isManualMode}
+                  onChange={(e) => setIsManualMode(e.target.checked)}
+                  className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <span className="font-medium">Kasir belum sinkron? Input Manual</span>
+              </label>
 
-              <div>
-                <label className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2 block">Jadwal Shift</label>
-                <select 
-                  value={selectedShiftId} 
-                  onChange={(e) => setSelectedShiftId(e.target.value)}
-                  className="w-full bg-background border border-border rounded-lg h-11 px-3 text-text-primary focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none"
-                >
-                  <option value="">-- Pilih Shift --</option>
-                  {shifts.map(s => <option key={s.id} value={s.id}>{s.name} ({s.startTime} - {s.endTime})</option>)}
-                </select>
-              </div>
+              {isManualMode ? (
+                <>
+                  <div>
+                    <label className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2 block">Nama Kasir (Manual)</label>
+                    <input 
+                      type="text"
+                      placeholder="Masukkan nama kasir"
+                      value={manualCashierName}
+                      onChange={(e) => setManualCashierName(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg h-11 px-3 text-text-primary focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2 block">Nama Shift (Manual)</label>
+                    <input 
+                      type="text"
+                      placeholder="Misal: Pagi / Malam"
+                      value={manualShiftName}
+                      onChange={(e) => setManualShiftName(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg h-11 px-3 text-text-primary focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2 block">Nama Kasir</label>
+                    <select 
+                      value={selectedCashierId} 
+                      onChange={(e) => setSelectedCashierId(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg h-11 px-3 text-text-primary focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none"
+                    >
+                      <option value="">-- Pilih Kasir --</option>
+                      {employees.map(e => <option key={e.id} value={e.id}>{e.name} ({e.role})</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2 block">Jadwal Shift</label>
+                    <select 
+                      value={selectedShiftId} 
+                      onChange={(e) => setSelectedShiftId(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg h-11 px-3 text-text-primary focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none"
+                    >
+                      <option value="">-- Pilih Shift --</option>
+                      {shifts.map(s => <option key={s.id} value={s.id}>{s.name} ({s.startTime} - {s.endTime})</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
 
               <button 
                 onClick={handleStartSession}

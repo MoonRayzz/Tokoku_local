@@ -349,8 +349,8 @@ export async function pullUpdatesFromCloud() {
       for (const att of todayAttendances) {
         await prisma.attendance.upsert({
           where: { id: att.id },
-          update: { checkIn: att.checkIn ? new Date(att.checkIn) : null, checkOut: att.checkOut ? new Date(att.checkOut) : null, shiftId: att.shiftId, notes: att.notes, hoursWorked: att.hoursWorked, wageUsed: att.wageUsed, totalWage: att.totalWage, isSolo: att.isSolo },
-          create: { id: att.id, employeeId: att.employeeId, shiftId: att.shiftId, date: new Date(att.date), checkIn: att.checkIn ? new Date(att.checkIn) : null, checkOut: att.checkOut ? new Date(att.checkOut) : null, notes: att.notes, hoursWorked: att.hoursWorked, wageUsed: att.wageUsed, totalWage: att.totalWage, isSolo: att.isSolo, createdAt: new Date(att.createdAt) }
+          update: { checkIn: att.checkIn ? new Date(att.checkIn) : null, checkOut: att.checkOut ? new Date(att.checkOut) : null, shiftId: att.shiftId, notes: att.notes, hoursWorked: att.hoursWorked, wageUsed: att.wageUsed, totalWage: att.totalWage, isSolo: att.isSolo, isPaid: att.isPaid || false, salaryPayoutId: att.salaryPayoutId || null },
+          create: { id: att.id, employeeId: att.employeeId, shiftId: att.shiftId, date: new Date(att.date), checkIn: att.checkIn ? new Date(att.checkIn) : null, checkOut: att.checkOut ? new Date(att.checkOut) : null, notes: att.notes, hoursWorked: att.hoursWorked, wageUsed: att.wageUsed, totalWage: att.totalWage, isSolo: att.isSolo, isPaid: att.isPaid || false, salaryPayoutId: att.salaryPayoutId || null, createdAt: new Date(att.createdAt) }
         });
       }
       console.log(`Berhasil pull ${todayAttendances.length} attendance hari ini dari Cloud.`);

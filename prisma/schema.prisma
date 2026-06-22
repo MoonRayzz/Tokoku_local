@@ -114,6 +114,7 @@ model Employee {
   updatedAt  DateTime     @updatedAt
   Attendance Attendance[]
   Expense    Expense[]
+  SalaryPayout SalaryPayout[]
 }
 
 model Shift {
@@ -139,9 +140,12 @@ model Attendance {
   wageUsed    Float?
   totalWage   Float?
   isSolo      Boolean?  @default(false)
+  isPaid      Boolean   @default(false)
+  salaryPayoutId String?
   createdAt   DateTime  @default(now())
   employee    Employee  @relation(fields: [employeeId], references: [id])
   shift       Shift?    @relation(fields: [shiftId], references: [id])
+  salaryPayout SalaryPayout? @relation(fields: [salaryPayoutId], references: [id])
 
   @@index([date])
   @@index([employeeId])
@@ -308,4 +312,20 @@ model DebtPayment {
   @@index([debtId])
   @@index([paidAt])
   @@index([syncStatus])
+}
+
+model SalaryPayout {
+  id          String   @id @default(uuid())
+  employeeId  String
+  amount      Float
+  month       Int
+  year        Int
+  notes       String?
+  paidAt      DateTime @default(now())
+  
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  attendances Attendance[]
+
+  @@index([employeeId])
+  @@index([paidAt])
 }
