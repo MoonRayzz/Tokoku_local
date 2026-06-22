@@ -64,6 +64,7 @@ export default async function LaporanPage(props: Props) {
 
   const expenseFilter = {
     date: { gte: currentStart, lt: currentEnd },
+    isVoid: false,
     ...(params?.shift ? { shiftId: params.shift } : {})
   };
 

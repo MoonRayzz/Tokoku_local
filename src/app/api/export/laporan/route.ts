@@ -79,6 +79,7 @@ export async function GET(req: NextRequest) {
     const expenses = await prisma.expense.findMany({
       where: {
         date: { gte: currentStart, lt: currentEnd },
+        isVoid: false,
         ...(shiftStr ? { shiftId: shiftStr } : {})
       },
       select: {

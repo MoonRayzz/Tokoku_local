@@ -368,6 +368,33 @@ export async function pullUpdatesFromCloud() {
       }
       console.log(`Berhasil pull ${todayAttendances.length} attendance hari ini dari Cloud.`);
     }
+    // 7. Pull Expenses (Untuk Sinkronisasi Pembatalan/isVoid & Penambahan dari Owner)
+    const latestLocalExpense = await prisma.expense.findFirst({ orderBy: { updatedAt: 'desc' } });
+    const lastExpenseUpdatedAt = latestLocalExpense ? latestLocalExpense.updatedAt.toISOString() : new Date(0).toISOString();
+
+    const { data: updatedExpenses, error: expError } = await supabase
+      .from('Expense')
+      .select('*')
+      .gt('updatedAt', lastExpenseUpdatedAt);
+
+    if (!expError && updatedExpenses && updatedExpenses.length > 0) {
+      for (const e of updatedExpenses) {
+        await prisma.expense.upsert({
+          where: { id: e.id },
+          update: { 
+            date: new Date(e.date), category: e.category, amount: e.amount, notes: e.notes,
+            employeeId: e.employeeId, shiftId: e.shiftId, syncStatus: 'SYNCED', isVoid: e.isVoid,
+            createdAt: new Date(e.createdAt), updatedAt: new Date(e.updatedAt)
+          },
+          create: { 
+            id: e.id, date: new Date(e.date), category: e.category, amount: e.amount, notes: e.notes,
+            employeeId: e.employeeId, shiftId: e.shiftId, syncStatus: 'SYNCED', isVoid: e.isVoid,
+            createdAt: new Date(e.createdAt), updatedAt: new Date(e.updatedAt)
+          }
+        });
+      }
+      console.log(`Berhasil pull ${updatedExpenses.length} expense dari Cloud.`);
+    }
 
     revalidatePath('/');
 

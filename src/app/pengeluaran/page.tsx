@@ -15,7 +15,9 @@ export default async function PengeluaranPage({
   const page = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
   const limit = PAGE_SIZE.PENGELUARAN;
 
-  const { expenses, totalCount } = await getExpenses(page, limit);
+  const dateParam = typeof resolvedParams.date === 'string' ? resolvedParams.date : undefined;
+
+  const { expenses, totalCount } = await getExpenses(page, limit, dateParam);
 
   const syncQueues = await prisma.syncQueue.findMany({
     where: {
