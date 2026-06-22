@@ -106,7 +106,7 @@ model Employee {
   id         String       @id @default(uuid())
   name       String
   phone      String?
-  role       String       @default("kasir")
+  role       String       @default("karyawan")
   isActive   Boolean      @default(true)
   wageBase   Float        @default(0)
   wageSolo   Float        @default(0)

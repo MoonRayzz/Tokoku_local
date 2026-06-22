@@ -27,6 +27,7 @@ export default async function POSPage() {
     }),
     prisma.employee.findMany({
       where: { isActive: true },
+      orderBy: { name: 'asc' },
       select: { id: true, name: true, role: true }
     }),
     prisma.shift.findMany({
