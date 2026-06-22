@@ -56,19 +56,20 @@ export default async function TransaksiPage({
   // Hitung summary global (bukan per halaman)
   // Summary biasanya hanya untuk filter yang aktif saat ini, atau total keseluruhan?
   // Kita buat total keseluruhan yang tidak di-void
-  const [cash, qris, debit, grand] = await Promise.all([
+  const dbSummary = { cash: 0, qris: 0, debit: 0, utang: 0, grand: 0 };
+  const [cashAgg, qrisAgg, debitAgg, utangAgg, grandAgg] = await Promise.all([
     prisma.transaction.aggregate({ _sum: { totalAmount: true }, where: { isVoid: false, paymentMethod: 'cash' } }),
     prisma.transaction.aggregate({ _sum: { totalAmount: true }, where: { isVoid: false, paymentMethod: 'qris' } }),
     prisma.transaction.aggregate({ _sum: { totalAmount: true }, where: { isVoid: false, paymentMethod: 'debit' } }),
+    prisma.transaction.aggregate({ _sum: { totalAmount: true }, where: { isVoid: false, paymentMethod: 'utang' } }),
     prisma.transaction.aggregate({ _sum: { totalAmount: true }, where: { isVoid: false } })
   ]);
 
-  const dbSummary = {
-    cash: cash._sum.totalAmount || 0,
-    qris: qris._sum.totalAmount || 0,
-    debit: debit._sum.totalAmount || 0,
-    grand: grand._sum.totalAmount || 0,
-  };
+  dbSummary.cash = cashAgg._sum.totalAmount || 0;
+  dbSummary.qris = qrisAgg._sum.totalAmount || 0;
+  dbSummary.debit = debitAgg._sum.totalAmount || 0;
+  dbSummary.utang = utangAgg._sum.totalAmount || 0;
+  dbSummary.grand = grandAgg._sum.totalAmount || 0;
 
   const shifts = await prisma.shift.findMany({ select: { id: true, name: true } });
 

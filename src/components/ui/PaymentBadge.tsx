@@ -23,6 +23,11 @@ const CONFIG: Record<string, { label: string; icon: string; classes: string }> =
     icon: 'credit_card',
     classes: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
   },
+  utang: {
+    label: 'UTANG',
+    icon: 'receipt_long',
+    classes: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
+  },
 };
 
 export function PaymentBadge({ method, size = 'sm' }: PaymentBadgeProps) {

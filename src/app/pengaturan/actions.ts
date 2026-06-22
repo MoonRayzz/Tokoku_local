@@ -332,7 +332,20 @@ export async function pullUpdatesFromCloud() {
       console.log(`Berhasil pull ${remoteShifts.length} shift dari Cloud.`);
     }
 
-    // 5. Pull Attendance (Today only to keep local DB light, or just all that changed recently)
+    // 5. Pull SalaryPayout
+    const { data: remotePayouts, error: payoutError } = await supabase.from('SalaryPayout').select('*');
+    if (!payoutError && remotePayouts) {
+      for (const p of remotePayouts) {
+        await prisma.salaryPayout.upsert({
+          where: { id: p.id },
+          update: { amount: p.amount, month: p.month, year: p.year, notes: p.notes, paidAt: new Date(p.paidAt) },
+          create: { id: p.id, employeeId: p.employeeId, amount: p.amount, month: p.month, year: p.year, notes: p.notes, paidAt: new Date(p.paidAt) }
+        });
+      }
+      console.log(`Berhasil pull ${remotePayouts.length} salary payout dari Cloud.`);
+    }
+
+    // 6. Pull Attendance (Today only to keep local DB light, or just all that changed recently)
     // Actually we just need recent ones for cashier check. Pull all that updated recently.
     const latestLocalAttendance = await prisma.attendance.findFirst({ orderBy: { createdAt: 'desc' } });
     const lastAttendanceCreatedAt = latestLocalAttendance ? latestLocalAttendance.createdAt.toISOString() : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(); // Last 7 days fallback

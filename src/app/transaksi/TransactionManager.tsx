@@ -43,6 +43,7 @@ interface TransactionManagerProps {
     cash: number;
     qris: number;
     debit: number;
+    utang: number;
     grand: number;
   };
   totalPages: number;
@@ -53,7 +54,7 @@ interface TransactionManagerProps {
   initialMethod: MethodFilter;
 }
 
-type MethodFilter = 'all' | 'cash' | 'qris' | 'debit';
+type MethodFilter = 'all' | 'cash' | 'qris' | 'debit' | 'utang';
 
 const formatRp = (n: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -194,6 +195,7 @@ export default function TransactionManager({
     { id: 'cash', label: 'Cash' },
     { id: 'qris', label: 'QRIS' },
     { id: 'debit', label: 'Debit' },
+    { id: 'utang', label: 'Utang' },
   ];
 
   return (
@@ -208,11 +210,12 @@ export default function TransactionManager({
       </div>
 
       {/* ── Closing Summary ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: 'Cash', value: summary.cash, icon: 'payments', color: 'text-primary-container bg-primary-container/10 border-primary-container/20' },
           { label: 'QRIS', value: summary.qris, icon: 'qr_code_2', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
           { label: 'Debit', value: summary.debit, icon: 'credit_card', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
+          { label: 'Utang', value: summary.utang, icon: 'receipt_long', color: 'text-amber-500 bg-amber-500/10 border-amber-500/20' },
           { label: 'Grand Total', value: summary.grand, icon: 'account_balance_wallet', color: 'text-text-primary bg-surface-container-high border-border' },
         ].map((s) => (
           <div key={s.label} className={`rounded-xl border p-4 ${s.color}`}>
