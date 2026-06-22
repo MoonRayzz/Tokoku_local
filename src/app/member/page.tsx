@@ -7,6 +7,7 @@ import { PageTransition } from '@/components/ui/PageTransition';
 export default async function MemberPage() {
   const [members, tiers, txGrouped] = await Promise.all([
     prisma.member.findMany({
+      where: { isVoid: false },
       orderBy: { joinedAt: 'desc' },
     }),
     prisma.memberTier.findMany({

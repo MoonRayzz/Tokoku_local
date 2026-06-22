@@ -187,15 +187,15 @@ export async function pullUpdatesFromCloud() {
 
     // 1.5 Pull Members
     const latestLocalMember = await prisma.member.findFirst({
-      orderBy: { joinedAt: 'desc' }
+      orderBy: { updatedAt: 'desc' }
     });
 
-    const lastMemberJoinedAt = latestLocalMember ? latestLocalMember.joinedAt.toISOString() : new Date(0).toISOString();
+    const lastMemberUpdatedAt = latestLocalMember ? latestLocalMember.updatedAt.toISOString() : new Date(0).toISOString();
 
     const { data: updatedMembers, error: memberError } = await supabase
       .from('Member')
       .select('*')
-      .gt('joinedAt', lastMemberJoinedAt);
+      .gt('updatedAt', lastMemberUpdatedAt);
 
     if (memberError) throw memberError;
 
@@ -206,13 +206,16 @@ export async function pullUpdatesFromCloud() {
           update: {
             name: member.name,
             phone: member.phone,
-            joinedAt: new Date(member.joinedAt)
+            isVoid: member.isVoid,
+            updatedAt: new Date(member.updatedAt)
           },
           create: {
             id: member.id,
             name: member.name,
             phone: member.phone,
-            joinedAt: new Date(member.joinedAt)
+            isVoid: member.isVoid,
+            joinedAt: new Date(member.joinedAt),
+            updatedAt: new Date(member.updatedAt)
           }
         });
       }

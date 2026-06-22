@@ -54,16 +54,17 @@ export async function addMember(formData: FormData) {
 export async function deleteMember(id: string) {
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.member.delete({
-        where: { id }
+      const deletedMember = await tx.member.update({
+        where: { id },
+        data: { isVoid: true }
       });
 
       await tx.syncQueue.create({
         data: {
           tableName: 'Member',
           recordId: id,
-          operation: 'DELETE',
-          payload: JSON.stringify({ id }),
+          operation: 'UPDATE', // It's an update because we are soft-deleting
+          payload: JSON.stringify(deletedMember),
           status: 'PENDING'
         }
       });

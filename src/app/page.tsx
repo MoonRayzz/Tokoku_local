@@ -10,6 +10,7 @@ export default async function POSPage() {
       select: { id: true, sku: true, name: true, priceRetail: true, priceWholesale: true, wholesaleMinQty: true, stock: true }
     }),
     prisma.member.findMany({
+      where: { isVoid: false },
       select: { id: true, name: true, phone: true }
     }),
     prisma.memberTier.findMany({

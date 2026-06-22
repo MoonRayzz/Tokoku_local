@@ -28,6 +28,9 @@ model Member {
   phone       String        @unique
   name        String
   joinedAt    DateTime      @default(now())
+  updatedAt   DateTime      @default(now()) @updatedAt
+  syncStatus  String        @default("PENDING")
+  isVoid      Boolean       @default(false)
   Transaction Transaction[]
   Debt        Debt[]
 }
