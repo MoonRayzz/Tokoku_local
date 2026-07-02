@@ -93,7 +93,8 @@ export async function processCheckout(payload: CheckoutPayload) {
     const date = new Date();
     const dateString = date.toISOString().slice(0, 10).replace(/-/g, '');
     const timeString = date.toTimeString().slice(0, 8).replace(/:/g, '');
-    const receiptNumber = `TRX-${dateString}-${timeString}`;
+    const ms = date.getMilliseconds().toString().padStart(3, '0');
+    const receiptNumber = `TRX-${dateString}-${timeString}${ms}`; // [FIX M1] ms suffix cegah duplikat
 
     const result = await prisma.$transaction(async (tx) => {
       // Ambil data produk terbaru untuk mendapatkan harga beli (HPP)

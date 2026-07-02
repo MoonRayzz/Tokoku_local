@@ -7,7 +7,7 @@ import { PageTransition } from '@/components/ui/PageTransition';
 export default async function POSPage() {
   const [products, members, tiers, txGrouped, allEmployees, shifts, activeAttendances, storeProfile] = await Promise.all([
     prisma.product.findMany({
-      select: { id: true, sku: true, name: true, priceRetail: true, priceWholesale: true, wholesaleMinQty: true, stock: true }
+      select: { id: true, sku: true, barcode: true, name: true, priceRetail: true, priceWholesale: true, wholesaleMinQty: true, stock: true }
     }),
     prisma.member.findMany({
       where: { isVoid: false },

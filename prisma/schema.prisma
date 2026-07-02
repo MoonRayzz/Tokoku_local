@@ -9,6 +9,7 @@ datasource db {
 model Product {
   id                String              @id @default(uuid())
   sku               String              @unique
+  barcode           String?             @unique  // Barcode fisik dari produsen (nullable)
   name              String
   priceBuy          Float?
   priceRetail       Float
@@ -21,7 +22,10 @@ model Product {
   TransactionDetail TransactionDetail[]
   PoItem            PoItem[]
   StockLog          StockLog[]
+
+  @@index([barcode])
 }
+
 
 model Member {
   id          String        @id @default(uuid())

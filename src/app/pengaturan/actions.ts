@@ -158,6 +158,7 @@ export async function pullUpdatesFromCloud() {
           where: { id: product.id },
           update: {
             sku: product.sku,
+            barcode: product.barcode || null,
             name: product.name,
             priceBuy: product.priceBuy,
             priceRetail: product.priceRetail,
@@ -169,6 +170,7 @@ export async function pullUpdatesFromCloud() {
           create: {
             id: product.id,
             sku: product.sku,
+            barcode: product.barcode || null,
             name: product.name,
             priceBuy: product.priceBuy,
             priceRetail: product.priceRetail,
@@ -398,6 +400,66 @@ export async function pullUpdatesFromCloud() {
         });
       }
       console.log(`Berhasil pull ${updatedExpenses.length} expense dari Cloud.`);
+    }
+
+    // [FIX W4] 8. Pull Supplier (Full sync — master bisa dari Owner)
+    const { data: remoteSuppliers, error: supplierError } = await supabase.from('Supplier').select('*');
+    if (!supplierError && remoteSuppliers) {
+      for (const s of remoteSuppliers) {
+        await prisma.supplier.upsert({
+          where: { id: s.id },
+          update: {
+            name: s.name,
+            phone: s.phone || null,
+            address: s.address || null,
+            notes: s.notes || null,
+            updatedAt: new Date(s.updatedAt)
+          },
+          create: {
+            id: s.id,
+            name: s.name,
+            phone: s.phone || null,
+            address: s.address || null,
+            notes: s.notes || null,
+            createdAt: new Date(s.createdAt),
+            updatedAt: new Date(s.updatedAt)
+          }
+        });
+      }
+      console.log(`Berhasil pull ${remoteSuppliers.length} supplier dari Cloud.`);
+    }
+
+    // [FIX W3] 9. Pull Debt (Delta sync — untuk sinkronisasi perubahan/pembatalan dari Owner)
+    const latestLocalDebt = await prisma.debt.findFirst({ orderBy: { updatedAt: 'desc' } });
+    const lastDebtUpdatedAt = latestLocalDebt ? latestLocalDebt.updatedAt.toISOString() : new Date(0).toISOString();
+    const { data: updatedDebts, error: debtError } = await supabase
+      .from('Debt')
+      .select('*')
+      .gt('updatedAt', lastDebtUpdatedAt);
+    if (!debtError && updatedDebts && updatedDebts.length > 0) {
+      for (const d of updatedDebts) {
+        // Cek apakah transaksi referensi sudah ada di lokal (syarat FK)
+        const txExists = await prisma.transaction.findUnique({ where: { id: d.transactionId }, select: { id: true } });
+        if (!txExists) continue; // Skip jika transaksi induk belum tersinkron
+
+        await prisma.debt.upsert({
+          where: { id: d.id },
+          update: {
+            debtorName: d.debtorName, debtorPhone: d.debtorPhone, debtorNotes: d.debtorNotes,
+            totalAmount: d.totalAmount, paidAmount: d.paidAmount, remaining: d.remaining,
+            status: d.status, syncStatus: 'SYNCED', updatedAt: new Date(d.updatedAt)
+          },
+          create: {
+            id: d.id, transactionId: d.transactionId, debtorName: d.debtorName,
+            debtorPhone: d.debtorPhone, debtorNotes: d.debtorNotes, memberId: d.memberId || null,
+            totalAmount: d.totalAmount, paidAmount: d.paidAmount, remaining: d.remaining,
+            status: d.status, kasirId: d.kasirId, isLimitOverride: d.isLimitOverride || false,
+            syncStatus: 'SYNCED', createdAt: new Date(d.createdAt), updatedAt: new Date(d.updatedAt)
+          }
+        });
+      }
+      console.log(`Berhasil pull ${updatedDebts.length} debt dari Cloud.`);
+      revalidatePath('/buku-utang');
     }
 
     revalidatePath('/');

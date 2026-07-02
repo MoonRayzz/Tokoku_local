@@ -52,7 +52,7 @@ export async function voidTransaction(transactionId: string, pin: string, reason
             stockBefore: product.stock,
             stockAfter: updatedProduct.stock,
             referenceId: transaction.id,
-            employeeId: 'Manager', // Sesuai dengan auth pin statis di atas
+            employeeId: employeeId, // [FIX W1] Gunakan employeeId dari parameter
             syncStatus: 'PENDING'
           }
         });

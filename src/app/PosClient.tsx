@@ -6,11 +6,13 @@ import { useCartStore } from '@/store/useCartStore';
 import { PaymentPanel } from '@/components/pos/PaymentPanel';
 import { useToast } from '@/components/ui/Toast';
 import { useSync } from '@/context/SyncContext';
+import { linkBarcodeToProduct } from '@/app/produk/actions';
 import type { CompletedTransaction, CartItem } from '@/hooks/usePayment';
 
 type Product = {
   id: string;
   sku: string;
+  barcode?: string | null;
   name: string;
   priceRetail: number;
   priceWholesale: number | null;
@@ -46,8 +48,12 @@ const formatRp = (num: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num);
 
 export default function PosClient({ products, members, tiers, memberStats, employees, shifts, storeProfile }: PosClientProps) {
+  const [localProducts, setLocalProducts] = useState<Product[]>(products);
+  useEffect(() => { setLocalProducts(products); }, [products]);
+
   const { items, total, addItem, removeItem, updateQuantity, clearCart } = useCartStore();
   const [searchInput, setSearchInput] = useState('');
+  const [unknownBarcode, setUnknownBarcode] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [lastTx, setLastTx] = useState<CompletedTransaction | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -114,47 +120,53 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const addItemToProductCart = (foundProduct: Product) => {
+    let finalPrice = foundProduct.priceRetail;
+    const currentQtyInCart =
+      items.find((i) => i.productId === foundProduct.id)?.quantity || 0;
+    const newQty = currentQtyInCart + 1;
+
+    if (foundProduct.stock < newQty) {
+      toast.error(`Stok ${foundProduct.name} tidak mencukupi (Sisa: ${foundProduct.stock})`);
+      return false;
+    }
+
+    if (
+      foundProduct.priceWholesale &&
+      foundProduct.wholesaleMinQty &&
+      newQty >= foundProduct.wholesaleMinQty
+    ) {
+      finalPrice = foundProduct.priceWholesale;
+    }
+
+    const existingItem = items.find((i) => i.productId === foundProduct.id);
+    if (existingItem) {
+      updateQuantity(existingItem.id, newQty, finalPrice);
+    } else {
+      addItem({ productId: foundProduct.id, name: foundProduct.name, price: finalPrice, quantity: 1 });
+    }
+    return true;
+  };
+
   // Logika Scanner & Pencarian Manual
   const handleScanOrSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchInput.trim()) return;
+    const query = searchInput.trim();
+    if (!query) return;
 
-    const foundProduct = products.find(
+    // 1. Cari by BARCODE dulu, lalu SKU, lalu nama partial/exact
+    const foundProduct = localProducts.find(
       (p) =>
-        p.sku === searchInput ||
-        p.name.toLowerCase() === searchInput.toLowerCase()
+        (p.barcode && p.barcode === query) ||
+        p.sku === query ||
+        p.name.toLowerCase() === query.toLowerCase()
     );
 
     if (foundProduct) {
-      let finalPrice = foundProduct.priceRetail;
-      const currentQtyInCart =
-        items.find((i) => i.productId === foundProduct.id)?.quantity || 0;
-      const newQty = currentQtyInCart + 1;
-
-      if (foundProduct.stock < newQty) {
-        toast.error(`Stok ${foundProduct.name} tidak mencukupi (Sisa: ${foundProduct.stock})`);
-        setSearchInput('');
-        return;
-      }
-
-      if (
-        foundProduct.priceWholesale &&
-        foundProduct.wholesaleMinQty &&
-        newQty >= foundProduct.wholesaleMinQty
-      ) {
-        finalPrice = foundProduct.priceWholesale;
-      }
-
-      const existingItem = items.find((i) => i.productId === foundProduct.id);
-      if (existingItem) {
-        updateQuantity(existingItem.id, newQty, finalPrice);
-      } else {
-        addItem({ productId: foundProduct.id, name: foundProduct.name, price: finalPrice, quantity: 1 });
-      }
-      
+      addItemToProductCart(foundProduct);
       setSearchInput('');
     } else {
-      const foundMember = members.find(m => m.phone === searchInput || m.id === searchInput);
+      const foundMember = members.find(m => m.phone === query || m.id === query);
       if (foundMember) {
         setSelectedMember(foundMember);
         toast.success(`Member ${foundMember.name} berhasil dipilih.`);
@@ -162,8 +174,15 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
         return;
       }
 
-      toast.warning(`Produk atau Member "${searchInput}" tidak ditemukan.`);
-      setSearchInput('');
+      // Cek apakah input terlihat seperti barcode scanner (angka/alphanumeric pendek tanpa spasi, min 4 max 25 char)
+      const looksLikeBarcode = /^[A-Za-z0-9\-]{4,25}$/.test(query) && !query.includes(' ');
+      if (looksLikeBarcode) {
+        setUnknownBarcode(query);
+        setSearchInput('');
+      } else {
+        toast.warning(`Produk atau Member "${query}" tidak ditemukan.`);
+        setSearchInput('');
+      }
     }
   };
 
@@ -188,7 +207,7 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
     const item = items.find((i) => i.id === cartItemId);
     if (!item) return;
     
-    const product = products.find((p) => p.id === item.productId);
+    const product = localProducts.find((p) => p.id === item.productId);
     
     // Jika menambah quantity, pastikan stok cukup
     if (newQty > item.quantity) {
@@ -611,7 +630,7 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
                   </tr>
                 ) : (
                   items.map((item) => {
-                    const product = products.find(p => p.id === item.productId);
+                    const product = localProducts.find(p => p.id === item.productId);
                     const isWholesale = product && product.priceWholesale && product.wholesaleMinQty && item.quantity >= product.wholesaleMinQty;
                     
                     return (
@@ -744,6 +763,117 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
           storeProfile={storeProfile}
         />
       </div>
+      </div>
+
+      {unknownBarcode && (
+        <LinkBarcodeDialog
+          barcode={unknownBarcode}
+          products={localProducts}
+          onLink={async (product) => {
+            const result = await linkBarcodeToProduct(product.id, unknownBarcode);
+            if (result.success) {
+              const updated = result.product || { ...product, barcode: unknownBarcode };
+              setLocalProducts(prev => prev.map(p => p.id === product.id ? { ...p, barcode: unknownBarcode } : p));
+              addItemToProductCart({ ...product, barcode: unknownBarcode });
+              toast.success(`Barcode berhasil ditautkan ke "${product.name}" dan dimasukkan ke keranjang!`);
+              setUnknownBarcode(null);
+            } else {
+              toast.error(result.error || 'Gagal menautkan barcode');
+            }
+          }}
+          onClose={() => setUnknownBarcode(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function LinkBarcodeDialog({
+  barcode,
+  products,
+  onLink,
+  onClose
+}: {
+  barcode: string;
+  products: Product[];
+  onLink: (product: Product) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const filtered = products.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.sku.toLowerCase().includes(search.toLowerCase())
+  ).slice(0, 8);
+
+  return (
+    <div className="absolute inset-0 bg-background/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 rounded-tl-2xl">
+      <div className="bg-surface border border-border rounded-xl shadow-2xl p-6 w-full max-w-md flex flex-col gap-4">
+        <div className="flex items-center gap-3 border-b border-border pb-3">
+          <div className="w-10 h-10 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-xl">barcode_scanner</span>
+          </div>
+          <div>
+            <h3 className="font-bold text-text-primary text-base">Barcode Belum Terdaftar</h3>
+            <p className="text-xs font-mono text-text-secondary mt-0.5">{barcode}</p>
+          </div>
+        </div>
+
+        <p className="text-xs text-text-secondary">
+          Pilih produk yang sesuai di bawah ini untuk menautkan barcode ini secara permanen. Scan berikutnya akan langsung mendeteksi produk tersebut.
+        </p>
+
+        <div>
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary text-sm">search</span>
+            <input
+              type="text"
+              placeholder="Cari nama produk atau SKU..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-background border border-border rounded-lg h-10 pl-9 pr-3 text-sm text-text-primary focus:border-primary outline-none"
+              autoFocus
+            />
+          </div>
+        </div>
+
+        <div className="max-h-60 overflow-y-auto flex flex-col gap-1.5 border border-border rounded-lg p-1.5 bg-background/50">
+          {filtered.length === 0 ? (
+            <div className="py-6 text-center text-xs text-text-secondary">Produk tidak ditemukan</div>
+          ) : (
+            filtered.map(p => (
+              <button
+                key={p.id}
+                disabled={isSaving}
+                onClick={async () => {
+                  setIsSaving(true);
+                  await onLink(p);
+                  setIsSaving(false);
+                }}
+                className="flex items-center justify-between p-2.5 rounded-lg hover:bg-surface-hover text-left transition-colors border border-transparent hover:border-border"
+              >
+                <div className="flex flex-col min-w-0 pr-2">
+                  <span className="text-sm font-medium text-text-primary truncate">{p.name}</span>
+                  <span className="text-[11px] font-mono text-text-secondary">SKU: {p.sku} | Stok: {p.stock}</span>
+                </div>
+                <span className="text-xs font-bold bg-primary/10 text-primary px-2.5 py-1 rounded shrink-0">
+                  Tautkan
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2 border-t border-border">
+          <button
+            onClick={onClose}
+            disabled={isSaving}
+            className="px-4 py-2 rounded-lg bg-surface-variant hover:bg-surface-bright text-text-secondary hover:text-text-primary text-xs font-medium transition-colors"
+          >
+            Batalkan
+          </button>
+        </div>
       </div>
     </div>
   );

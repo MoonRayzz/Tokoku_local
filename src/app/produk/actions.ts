@@ -16,10 +16,90 @@ export async function getProductBySku(sku: string) {
   }
 }
 
+// Cari produk by barcode ATAU sku — untuk POS scanner
+export async function getProductByBarcodeOrSku(query: string) {
+  try {
+    return await prisma.product.findFirst({
+      where: { OR: [{ barcode: query }, { sku: query }] }
+    });
+  } catch (error) {
+    console.error('Error fetching product by barcode/sku:', error);
+    return null;
+  }
+}
+
+// Tautkan barcode fisik ke produk yang sudah ada
+export async function linkBarcodeToProduct(productId: string, barcode: string) {
+  try {
+    if (!barcode || !productId) {
+      return { success: false, error: 'Barcode dan ID produk wajib diisi.' };
+    }
+
+    // Cek apakah barcode sudah dipakai produk lain
+    const existing = await prisma.product.findUnique({ where: { barcode } });
+    if (existing && existing.id !== productId) {
+      return { success: false, error: `Barcode ini sudah terdaftar untuk produk "${existing.name}".` };
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const product = await tx.product.update({
+        where: { id: productId },
+        data: { barcode }
+      });
+
+      await tx.syncQueue.create({
+        data: {
+          tableName: 'Product',
+          recordId: product.id,
+          operation: 'UPDATE',
+          payload: JSON.stringify(product),
+          status: 'PENDING'
+        }
+      });
+
+      return product;
+    });
+
+    revalidatePath('/produk');
+    revalidatePath('/');
+    return { success: true, product: updated };
+  } catch (error: any) {
+    console.error('Error linking barcode:', error);
+    return { success: false, error: 'Gagal menyimpan barcode. Mungkin barcode sudah dipakai produk lain.' };
+  }
+}
+
+// Hapus barcode dari produk (untuk koreksi jika salah link)
+export async function unlinkBarcode(productId: string) {
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      const product = await tx.product.update({
+        where: { id: productId },
+        data: { barcode: null }
+      });
+      await tx.syncQueue.create({
+        data: {
+          tableName: 'Product',
+          recordId: product.id,
+          operation: 'UPDATE',
+          payload: JSON.stringify(product),
+          status: 'PENDING'
+        }
+      });
+      return product;
+    });
+    revalidatePath('/produk');
+    return { success: true, product: updated };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function addProduct(formData: FormData, cashierName: string = 'Admin') {
   try {
     const name = formData.get('name') as string;
     let sku = formData.get('sku') as string;
+    const barcode = (formData.get('barcode') as string)?.trim() || null;
     const priceBuyStr = formData.get('priceBuy') as string;
     const priceBuy = priceBuyStr ? parseFloat(priceBuyStr) : null;
     const priceRetail = parseFloat(formData.get('priceRetail') as string);
@@ -53,6 +133,7 @@ export async function addProduct(formData: FormData, cashierName: string = 'Admi
         data: {
           name,
           sku,
+          barcode,
           priceBuy,
           priceRetail,
           stock,
@@ -248,6 +329,7 @@ export async function importProductsCSV(csvData: string) {
         const addedStock = parseInt(getCol(6)) || 0;
         const minStockAlertStr = getCol(7);
         const minStockAlert = minStockAlertStr ? parseInt(minStockAlertStr) : 5;
+        const barcodeRaw = getCol(8)?.trim() || null;  // Kolom Barcode (opsional)
 
         if (!sku || !name || priceRetail <= 0) continue; // skip invalid rows
 
@@ -264,7 +346,9 @@ export async function importProductsCSV(csvData: string) {
               priceWholesale,
               wholesaleMinQty,
               stock: { increment: addedStock },
-              minStockAlert
+              minStockAlert,
+              // Update barcode hanya jika ada nilai baru dan produk belum punya barcode
+              ...(barcodeRaw && !existing.barcode ? { barcode: barcodeRaw } : {})
             }
           });
           
@@ -282,6 +366,7 @@ export async function importProductsCSV(csvData: string) {
             data: {
               sku,
               name,
+              barcode: barcodeRaw || null,
               priceBuy: hargaBeli,
               priceRetail,
               priceWholesale,

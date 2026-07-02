@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createPurchaseOrder } from './actions';
+import { linkBarcodeToProduct } from '../actions';
 import { ArrowLeft, Trash2, Save, Search } from 'lucide-react';
 import { useSync } from '@/context/SyncContext';
 import { useToast } from '@/components/ui/Toast';
@@ -14,13 +15,39 @@ export default function PurchaseOrderManager({ products }: { products: any[] }) 
   const [items, setItems] = useState<{ productId: string; name: string; quantity: number; priceBuy: number; subtotal: number }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [unknownBarcode, setUnknownBarcode] = useState<string | null>(null);
+  const [localProducts, setLocalProducts] = useState<any[]>(products);
+  useEffect(() => { setLocalProducts(products); }, [products]);
+
   const { triggerSync } = useSync();
   const toast = useToast();
 
-  const filteredProducts = products.filter(p => 
+  const filteredProducts = localProducts.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+    p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.barcode && p.barcode.includes(searchTerm))
   );
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const query = searchTerm.trim();
+      if (!query) return;
+
+      const found = localProducts.find(p => (p.barcode && p.barcode === query) || p.sku === query || p.name.toLowerCase() === query.toLowerCase());
+      if (found) {
+        addItem(found);
+      } else {
+        const looksLikeBarcode = /^[A-Za-z0-9\-]{4,25}$/.test(query) && !query.includes(' ');
+        if (looksLikeBarcode) {
+          setUnknownBarcode(query);
+          setSearchTerm('');
+        } else {
+          toast.warning(`Produk "${query}" tidak ditemukan.`);
+        }
+      }
+    }
+  };
 
   const addItem = (product: any) => {
     if (items.some(i => i.productId === product.id)) return;
@@ -106,9 +133,10 @@ export default function PurchaseOrderManager({ products }: { products: any[] }) 
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
               <input 
                 type="text"
-                placeholder="Cari produk (nama / sku)..."
+                placeholder="Scan barcode / cari produk (nama/SKU)..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="w-full bg-surface-background border border-border-divider rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-primary"
               />
             </div>
@@ -119,7 +147,9 @@ export default function PurchaseOrderManager({ products }: { products: any[] }) 
                   <div key={product.id} className="flex items-center justify-between p-3 hover:bg-surface-hover transition-colors">
                     <div>
                       <p className="font-medium text-text-primary">{product.name}</p>
-                      <p className="text-sm text-text-secondary">SKU: {product.sku} | Stok: {product.stock}</p>
+                      <p className="text-sm text-text-secondary">
+                        SKU: {product.sku}{product.barcode ? ` | Barcode: ${product.barcode}` : ''} | Stok: {product.stock}
+                      </p>
                     </div>
                     <button 
                       type="button"
@@ -240,6 +270,65 @@ export default function PurchaseOrderManager({ products }: { products: any[] }) 
           </form>
         </div>
       </div>
+
+      {unknownBarcode && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface-card border border-border-divider rounded-2xl p-6 w-full max-w-md shadow-2xl flex flex-col gap-4">
+            <div className="flex items-center gap-3 border-b border-border-divider pb-3">
+              <div className="w-10 h-10 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center shrink-0">
+                <Search size={20} />
+              </div>
+              <div>
+                <h3 className="font-bold text-text-primary text-base">Barcode Belum Terdaftar</h3>
+                <p className="text-xs font-mono text-text-secondary mt-0.5">{unknownBarcode}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-text-secondary">
+              Pilih produk di bawah ini untuk menautkan barcode ini secara permanen. PO / Terima Stok berikutnya akan langsung mendeteksi produk ini.
+            </p>
+
+            <div className="max-h-60 overflow-y-auto flex flex-col gap-1.5 border border-border-divider rounded-xl p-1.5 bg-surface-background">
+              {localProducts.slice(0, 10).map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={async () => {
+                    const res = await linkBarcodeToProduct(p.id, unknownBarcode);
+                    if (res.success) {
+                      setLocalProducts(prev => prev.map(prod => prod.id === p.id ? { ...prod, barcode: unknownBarcode } : prod));
+                      addItem({ ...p, barcode: unknownBarcode });
+                      toast.success(`Barcode berhasil ditautkan ke "${p.name}"!`);
+                      setUnknownBarcode(null);
+                    } else {
+                      toast.error(res.error || 'Gagal menautkan barcode');
+                    }
+                  }}
+                  className="flex items-center justify-between p-2.5 rounded-lg hover:bg-surface-hover text-left transition-colors border border-transparent hover:border-border-divider"
+                >
+                  <div className="flex flex-col min-w-0 pr-2">
+                    <span className="text-sm font-medium text-text-primary truncate">{p.name}</span>
+                    <span className="text-[11px] font-mono text-text-secondary">SKU: {p.sku} | Stok: {p.stock}</span>
+                  </div>
+                  <span className="text-xs font-bold bg-brand-primary/10 text-brand-primary px-2.5 py-1 rounded shrink-0">
+                    Tautkan
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border-divider">
+              <button
+                type="button"
+                onClick={() => setUnknownBarcode(null)}
+                className="px-4 py-2 rounded-lg bg-surface-hover text-text-secondary hover:text-text-primary text-xs font-medium transition-colors"
+              >
+                Batalkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

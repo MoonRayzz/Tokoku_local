@@ -15,6 +15,7 @@ import Pagination from '@/components/ui/Pagination';
 type Product = {
   id: string;
   sku: string;
+  barcode?: string | null;
   name: string;
   priceBuy: number | null;
   priceRetail: number;
@@ -237,9 +238,9 @@ export default function ProductManager({ initialProducts, totalPages, totalCount
 
   // Fungsi Download Template Excel (.xlsx)
   const handleDownloadTemplate = () => {
-    const header = [["SKU", "Nama Produk", "Harga Beli (HPP)", "Harga Ecer", "Harga Grosir", "Min Qty Grosir", "Stok Ditambahkan", "Batas Stok Menipis"]];
-    const example1 = ["SKU-001", "Kopi Susu Instan", 3500, 5000, 4500, 10, 100, 10];
-    const example2 = ["SKU-002", "Mie Goreng", 2500, 3000, null, null, 50, 5];
+    const header = [["SKU", "Nama Produk", "Harga Beli (HPP)", "Harga Ecer", "Harga Grosir", "Min Qty Grosir", "Stok Ditambahkan", "Batas Stok Menipis", "Barcode"]];
+    const example1 = ["SKU-001", "Kopi Susu Instan", 3500, 5000, 4500, 10, 100, 10, "8991234567890"];
+    const example2 = ["SKU-002", "Mie Goreng", 2500, 3000, null, null, 50, 5, ""];
     const wsData = XLSX.utils.aoa_to_sheet([...header, example1, example2]);
 
     const guideData = [
@@ -252,7 +253,8 @@ export default function ProductManager({ initialProducts, totalPages, totalCount
       ["5. Kolom Harga Grosir: Opsional (Boleh dikosongkan)."],
       ["6. Kolom Min Qty Grosir: Opsional (Boleh dikosongkan)."],
       ["7. Kolom Stok Ditambahkan: Wajib diisi berupa ANGKA SAJA. Angka ini akan DITAMBAHKAN ke stok lama."],
-      ["8. Kolom Batas Stok Menipis: Opsional (Boleh dikosongkan, default: 5)."]
+      ["8. Kolom Batas Stok Menipis: Opsional (Boleh dikosongkan, default: 5)."],
+      ["9. Kolom Barcode: Opsional. Isi angka barcode fisik pabrik jika ada."]
     ];
     const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
 
@@ -404,7 +406,9 @@ export default function ProductManager({ initialProducts, totalPages, totalCount
                   <tr key={product.id} className={`border-b border-border transition-colors ${rowClass}`}>
                     <td className="p-4 pl-3">
                       <div className="font-semibold text-text-primary">{product.name}</div>
-                      <div className="text-text-secondary font-label-sm text-label-sm mt-0.5 font-mono">SKU: {product.sku}</div>
+                      <div className="text-text-secondary font-label-sm text-label-sm mt-0.5 font-mono">
+                        SKU: {product.sku}{product.barcode ? ` | Barcode: ${product.barcode}` : ''}
+                      </div>
                     </td>
                     <td className="p-4">
                       <div className={`flex items-center gap-2 mb-1 ${isLowStock ? 'text-warning font-bold' : isOutOfStock ? 'text-danger font-bold' : ''}`}>
@@ -494,9 +498,9 @@ export default function ProductManager({ initialProducts, totalPages, totalCount
                   </div>
                 )}
                 
-                <div className="col-span-1 md:col-span-2 focus-pulse">
+                <div className="col-span-1 md:col-span-1 focus-pulse">
                   <label className="block text-text-secondary mb-2 font-label-md text-label-md flex items-center gap-2">
-                    SKU / Barcode
+                    SKU (Kode Internal)
                     {isLoadingApi && <span className="text-primary text-[10px] animate-pulse">(Mencari di internet...)</span>}
                   </label>
                   <input 
@@ -506,11 +510,24 @@ export default function ProductManager({ initialProducts, totalPages, totalCount
                     value={skuInput}
                     onChange={(e) => setSkuInput(e.target.value)}
                     className={`w-full border rounded h-11 px-4 text-text-primary focus:outline-none transition-all ${existingProduct ? 'bg-primary-container/20 border-primary-container' : 'bg-background border-border'}`}
-                    placeholder="Scan barcode di sini..." 
+                    placeholder="Ketik SKU atau scan..." 
                   />
                   {existingProduct && (
                     <p className="text-primary text-xs mt-1">✓ Produk ditemukan di database. Beralih ke mode Edit / Restock.</p>
                   )}
+                </div>
+
+                <div className="col-span-1 md:col-span-1 focus-pulse">
+                  <label className="block text-text-secondary mb-2 font-label-md text-label-md flex items-center gap-2">
+                    Barcode Fisik (Opsional)
+                  </label>
+                  <input 
+                    name="barcode" 
+                    type="text" 
+                    defaultValue={existingProduct?.barcode || ''}
+                    className="w-full border border-border rounded h-11 px-4 text-text-primary focus:outline-none transition-all bg-background focus:border-primary-container font-mono"
+                    placeholder="Scan barcode pabrik..." 
+                  />
                 </div>
 
                 <div className="col-span-1 md:col-span-2 focus-pulse">

@@ -31,6 +31,17 @@ export async function createPurchaseOrder(data: {
             }
           });
           supplierId = newSupplier.id;
+
+          // [FIX B2] Queue Supplier baru ke cloud
+          await tx.syncQueue.create({
+            data: {
+              tableName: 'Supplier',
+              recordId: newSupplier.id,
+              operation: 'INSERT',
+              payload: JSON.stringify(newSupplier),
+              status: 'PENDING'
+            }
+          });
         }
       }
 

@@ -20,7 +20,8 @@ export default async function ProdukPage({
   const whereClause: any = searchParam ? {
     OR: [
       { name: { contains: searchParam } },
-      { sku: { contains: searchParam } }
+      { sku: { contains: searchParam } },
+      { barcode: { contains: searchParam } }
     ]
   } : {};
 
