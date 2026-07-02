@@ -14,6 +14,7 @@ export default function RekapClient({ employees, shifts, activeAttendances }: an
   const [startingCash, setStartingCash] = useState<number>(0);
   const [actualCash, setActualCash] = useState<number>(0);
   const [notes, setNotes] = useState('');
+  const [actionAfterClose, setActionAfterClose] = useState('KEPT_IN_DRAWER');
   
   const [systemData, setSystemData] = useState<{
     netSales: number;
@@ -106,7 +107,8 @@ export default function RekapClient({ employees, shifts, activeAttendances }: an
         variance,
         totalSales: systemData.netSales,
         totalExpense: systemData.totalExpense,
-        notes
+        notes,
+        actionAfterClose
       });
 
       if (res.success) {
@@ -365,6 +367,39 @@ export default function RekapClient({ employees, shifts, activeAttendances }: an
                 />
               </div>
             )}
+            <div className="space-y-3 mt-6">
+              <label className="text-sm font-bold text-text-primary">Status Uang Fisik Laci (Wajib Pilih):</label>
+              <div className="flex flex-col gap-3">
+                <label className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${actionAfterClose === 'KEPT_IN_DRAWER' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border hover:bg-surface-bright'}`}>
+                  <input 
+                    type="radio" 
+                    name="actionAfterClose" 
+                    value="KEPT_IN_DRAWER" 
+                    checked={actionAfterClose === 'KEPT_IN_DRAWER'} 
+                    onChange={(e) => setActionAfterClose(e.target.value)}
+                    className="w-4 h-4 text-primary focus:ring-primary"
+                  />
+                  <div>
+                    <p className="font-bold text-text-primary text-sm">🔒 Tinggal di Laci (Nyambung ke shift selanjutnya)</p>
+                    <p className="text-xs text-text-secondary mt-1">Uang fisik dibiarkan di laci. Shift selanjutnya akan mencatat nominal ini sebagai modal awal.</p>
+                  </div>
+                </label>
+                <label className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${actionAfterClose === 'DEPOSITED' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border hover:bg-surface-bright'}`}>
+                  <input 
+                    type="radio" 
+                    name="actionAfterClose" 
+                    value="DEPOSITED" 
+                    checked={actionAfterClose === 'DEPOSITED'} 
+                    onChange={(e) => setActionAfterClose(e.target.value)}
+                    className="w-4 h-4 text-primary focus:ring-primary"
+                  />
+                  <div>
+                    <p className="font-bold text-text-primary text-sm">📥 Setor ke Owner / Brankas (Laci dikosongkan)</p>
+                    <p className="text-xs text-text-secondary mt-1">Uang fisik diserahkan ke manajer/owner. Shift selanjutnya akan mulai dengan laci kosong (Rp 0).</p>
+                  </div>
+                </label>
+              </div>
+            </div>
 
             <div className="flex justify-between pt-6 mt-6 border-t border-border">
               <button 

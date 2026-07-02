@@ -135,6 +135,7 @@ model CashRegisterReport {
   totalExpense  Float
   notes         String?
   status        String   @default("CLOSED")
+  actionAfterClose String @default("KEPT_IN_DRAWER")
   syncStatus    String   @default("PENDING")
   isVoid        Boolean  @default(false)
   createdAt     DateTime @default(now())

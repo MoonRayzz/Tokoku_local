@@ -43,7 +43,7 @@ export async function getSystemCash(employeeId: string, shiftId: string | null) 
   
   const rawSales = txAgg._sum.totalAmount || 0;
   const totalDiscount = txAgg._sum.discountAmount || 0;
-  const netSales = rawSales - totalDiscount;
+  const netSales = rawSales; // totalAmount sudah merupakan harga akhir (net) setelah diskon
 
   // Calculate Expenses (Tunai out)
   const expenseAgg = await prisma.expense.aggregate({
@@ -93,6 +93,7 @@ export async function submitRekapKasir(data: {
   totalSales: number;
   totalExpense: number;
   notes: string;
+  actionAfterClose: string;
 }) {
   try {
     await prisma.$transaction(async (tx) => {
@@ -110,6 +111,7 @@ export async function submitRekapKasir(data: {
           totalExpense: data.totalExpense,
           notes: data.notes,
           status: 'CLOSED',
+          actionAfterClose: data.actionAfterClose,
           syncStatus: 'PENDING'
         }
       });

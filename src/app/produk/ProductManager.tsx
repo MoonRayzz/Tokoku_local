@@ -151,11 +151,41 @@ export default function ProductManager({ initialProducts, totalPages, totalCount
   const clientAction = (formData: FormData) => {
     setErrorMessage('');
     
+    // Ambil nama kasir aktif
+    let cashierName = 'Admin';
+    try {
+      const sessionStr = localStorage.getItem('pos_session');
+      if (sessionStr) {
+        const session = JSON.parse(sessionStr);
+        if (session.cashierName) {
+          cashierName = session.cashierName;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse pos_session', e);
+    }
+    
     startTransition(async () => {
       if (existingProduct) {
         // MODE: RESTOCK PRODUK LAMA (Bisa update Harga Beli)
         const addedStock = parseInt(formData.get('stock') as string) || 0;
-        const result = await restockProduct(existingProduct.id, addedStock, formData);
+        
+        const priceBuyStr = formData.get('priceBuy') as string;
+        const priceRetailStr = formData.get('priceRetail') as string;
+        const priceWholesaleStr = formData.get('priceWholesale') as string;
+        const minStockAlertStr = formData.get('minStockAlert') as string;
+        const wholesaleMinQtyStr = formData.get('wholesaleMinQty') as string;
+
+        const updates = {
+          name: formData.get('name') as string,
+          priceBuy: priceBuyStr ? parseFloat(priceBuyStr) : null,
+          priceRetail: priceRetailStr ? parseFloat(priceRetailStr) : undefined,
+          minStockAlert: minStockAlertStr ? parseInt(minStockAlertStr) : undefined,
+          priceWholesale: priceWholesaleStr ? parseFloat(priceWholesaleStr) : null,
+          wholesaleMinQty: wholesaleMinQtyStr ? parseInt(wholesaleMinQtyStr) : null,
+        };
+
+        const result = await restockProduct(existingProduct.id, addedStock, updates, cashierName);
         if (result.success) {
           toast.success(`Stok produk "${existingProduct.name}" berhasil ditambah sebanyak ${addedStock} pcs.`);
           setIsModalOpen(false);
@@ -164,7 +194,7 @@ export default function ProductManager({ initialProducts, totalPages, totalCount
         }
       } else {
         // MODE: TAMBAH PRODUK BARU
-        const result = await addProduct(formData);
+        const result = await addProduct(formData, cashierName);
         if (result.success) {
           toast.success('Produk baru berhasil ditambahkan.');
           setIsModalOpen(false);

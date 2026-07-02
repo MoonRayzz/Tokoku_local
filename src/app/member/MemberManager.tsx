@@ -4,6 +4,9 @@
 import React, { useState, useTransition, useRef } from 'react';
 import { addMember, deleteMember } from './actions';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { useReactToPrint } from 'react-to-print';
+import { PrintableMemberCards } from './components/PrintableMemberCards';
+import { MemberCardProps } from './components/MemberCard';
 
 type MemberType = {
   id: string;
@@ -26,14 +29,40 @@ interface MemberManagerProps {
   initialMembers: MemberType[];
   tiers: MemberTier[];
   memberStats: Record<string, { txCount: number, totalSpent: number }>;
+  storeProfile: { name: string; logoUrl: string | null };
 }
 
-export default function MemberManager({ initialMembers, tiers, memberStats }: MemberManagerProps) {
+export default function MemberManager({ initialMembers, tiers, memberStats, storeProfile }: MemberManagerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState('');
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   
   const formRef = useRef<HTMLFormElement>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: 'Kartu Member TokoKu',
+  });
+
+  const toggleSelectAll = () => {
+    if (selectedMembers.size === filteredMembers.length && filteredMembers.length > 0) {
+      setSelectedMembers(new Set());
+    } else {
+      setSelectedMembers(new Set(filteredMembers.map(m => m.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedMembers);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedMembers(newSet);
+  };
 
   // Filter pencarian reaktif
   const filteredMembers = initialMembers.filter(member => 
@@ -105,6 +134,21 @@ export default function MemberManager({ initialMembers, tiers, memberStats }: Me
     }
   };
 
+  const printCardsData: MemberCardProps[] = Array.from(selectedMembers).map(id => {
+    const member = initialMembers.find(m => m.id === id);
+    if (!member) return null;
+    const tier = getMemberTier(member.id);
+    return {
+      memberId: member.id,
+      name: member.name,
+      phone: member.phone,
+      tierName: tier.name,
+      tierColorClass: tier.color,
+      storeName: storeProfile?.name || 'TokoKu',
+      logoUrl: storeProfile?.logoUrl,
+    };
+  }).filter(Boolean) as MemberCardProps[];
+
   return (
     <div className="flex-1 overflow-y-auto p-margin-desktop h-full">
       <div className="mb-8">
@@ -115,8 +159,8 @@ export default function MemberManager({ initialMembers, tiers, memberStats }: Me
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Kolom Kiri: Tabel Data Member */}
         <div className="flex-1 flex flex-col gap-4">
-          <div className="bg-surface p-4 border border-border rounded-lg flex items-center">
-            <div className="w-full relative focus-pulse rounded">
+          <div className="bg-surface p-4 border border-border rounded-lg flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div className="w-full sm:w-1/2 relative focus-pulse rounded">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary text-[18px]">search</span>
               <input 
                 type="text" 
@@ -126,12 +170,21 @@ export default function MemberManager({ initialMembers, tiers, memberStats }: Me
                 className="w-full bg-background border border-border rounded h-10 pl-10 pr-4 text-text-primary font-body-md text-body-md focus:outline-none transition-all"
               />
             </div>
+            {selectedMembers.size > 0 && (
+              <button onClick={() => handlePrint()} className="px-4 py-2 bg-primary-container hover:brightness-110 text-on-primary-container rounded text-sm font-bold flex items-center gap-2 transition-all">
+                <span className="material-symbols-outlined text-[18px]">print</span>
+                Cetak {selectedMembers.size} Member Terpilih
+              </button>
+            )}
           </div>
 
           <div className="border border-border rounded-lg overflow-x-auto bg-surface">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-border bg-surface-container-low">
+                  <th className="p-4 w-10 text-center">
+                    <input type="checkbox" onChange={toggleSelectAll} checked={filteredMembers.length > 0 && selectedMembers.size === filteredMembers.length} className="w-4 h-4 cursor-pointer" />
+                  </th>
                   <th className="p-4 font-label-md text-label-md text-text-secondary font-medium">Pelanggan</th>
                   <th className="p-4 font-label-md text-label-md text-text-secondary font-medium">Kontak</th>
                   <th className="p-4 font-label-md text-label-md text-text-secondary font-medium">Tanggal Gabung</th>
@@ -143,13 +196,16 @@ export default function MemberManager({ initialMembers, tiers, memberStats }: Me
               <tbody className="font-body-md text-body-md">
                 {filteredMembers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-text-secondary">Belum ada data pelanggan.</td>
+                    <td colSpan={7} className="p-8 text-center text-text-secondary">Belum ada data pelanggan.</td>
                   </tr>
                 ) : (
                   filteredMembers.map((member) => {
                     const tier = getMemberTier(member.id);
                     return (
                       <tr key={member.id} className="border-b border-border hover:bg-surface-container-high transition-colors">
+                        <td className="p-4 text-center">
+                          <input type="checkbox" onChange={() => toggleSelect(member.id)} checked={selectedMembers.has(member.id)} className="w-4 h-4 cursor-pointer" />
+                        </td>
                         <td className="p-4 font-medium text-text-primary">{member.name}</td>
                         <td className="p-4 text-text-secondary">{member.phone}</td>
                         <td className="p-4 text-text-secondary">{new Date(member.joinedAt).toLocaleDateString('id-ID')}</td>
@@ -169,9 +225,14 @@ export default function MemberManager({ initialMembers, tiers, memberStats }: Me
                           </span>
                         </td>
                         <td className="p-4 text-right">
-                          <button disabled={isPending} onClick={() => handleDelete(member.id, member.name)} className="p-1.5 text-text-secondary hover:text-danger transition-colors">
-                            <span className="material-symbols-outlined text-[20px]">delete</span>
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => { setSelectedMembers(new Set([member.id])); setTimeout(() => handlePrint(), 100); }} className="p-1.5 text-text-secondary hover:text-primary transition-colors" title="Cetak Kartu">
+                              <span className="material-symbols-outlined text-[20px]">print</span>
+                            </button>
+                            <button disabled={isPending} onClick={() => handleDelete(member.id, member.name)} className="p-1.5 text-text-secondary hover:text-danger transition-colors" title="Hapus Member">
+                              <span className="material-symbols-outlined text-[20px]">delete</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -255,6 +316,11 @@ export default function MemberManager({ initialMembers, tiers, memberStats }: Me
             </div>
           </div>
         </div>
+      </div>
+      
+      {/* Hidden Printable Component */}
+      <div className="absolute opacity-0 -left-[9999px] -top-[9999px]">
+        <PrintableMemberCards ref={printRef} cards={printCardsData} />
       </div>
     </div>
   );

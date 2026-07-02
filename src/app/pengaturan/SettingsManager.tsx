@@ -83,6 +83,7 @@ export default function SettingsManager({ pendingSyncCount }: SettingsManagerPro
     setIsSavingStore(false);
     if (result.success) {
       toast.success('Pengaturan toko berhasil disimpan!');
+      window.dispatchEvent(new Event('storeProfileUpdated'));
     } else {
       toast.error('Gagal menyimpan profil toko!');
     }
@@ -296,7 +297,7 @@ export default function SettingsManager({ pendingSyncCount }: SettingsManagerPro
                       <img src={storeConfig.logoUrl} alt="Logo" className="h-8 object-contain mix-blend-multiply grayscale" />
                     </div>
                   )}
-                  <div className="font-bold text-[16px] mb-1">{storeConfig.name.toUpperCase()}</div>
+                  <div className="font-bold text-[16px] mb-1">{storeConfig.name}</div>
                   <div className="break-words">{storeConfig.address}</div>
                   <div>{storeConfig.city}</div>
                   <div>Telp: {storeConfig.phone}</div>

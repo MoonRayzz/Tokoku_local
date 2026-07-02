@@ -271,7 +271,8 @@ export async function pullUpdatesFromCloud() {
       const localProfile = await prisma.storeProfile.findUnique({ where: { id: 'local-store' }});
       
       // Jika remote lebih baru atau lokal belum ada
-      if (!localProfile || new Date(remoteProfile.updatedAt) > localProfile.updatedAt) {
+      const remoteDateStr = remoteProfile.updatedAt + (remoteProfile.updatedAt.endsWith('Z') ? '' : 'Z');
+      if (!localProfile || new Date(remoteDateStr) > localProfile.updatedAt) {
         await prisma.storeProfile.upsert({
           where: { id: 'local-store' },
           update: {
@@ -284,7 +285,7 @@ export async function pullUpdatesFromCloud() {
             debtEnabled: remoteProfile.debtEnabled,
             debtLimitPerPerson: remoteProfile.debtLimitPerPerson,
             debtLimitBehavior: remoteProfile.debtLimitBehavior,
-            updatedAt: new Date(remoteProfile.updatedAt)
+            updatedAt: new Date(remoteDateStr)
           },
           create: {
             id: 'local-store',
@@ -297,7 +298,7 @@ export async function pullUpdatesFromCloud() {
             debtEnabled: remoteProfile.debtEnabled,
             debtLimitPerPerson: remoteProfile.debtLimitPerPerson,
             debtLimitBehavior: remoteProfile.debtLimitBehavior,
-            updatedAt: new Date(remoteProfile.updatedAt)
+            updatedAt: new Date(remoteDateStr)
           }
         });
         console.log('Berhasil pull StoreProfile dari Cloud.');

@@ -13,12 +13,18 @@ export function Sidebar() {
   const [storeName, setStoreName] = useState('TokoKu POS');
 
   useEffect(() => {
-    getStoreProfile().then(profile => {
-      if (profile) {
-        if (profile.logoUrl) setLogoUrl(profile.logoUrl);
-        if (profile.name) setStoreName(profile.name);
-      }
-    });
+    const fetchProfile = () => {
+      getStoreProfile().then(profile => {
+        if (profile) {
+          if (profile.logoUrl) setLogoUrl(profile.logoUrl);
+          if (profile.name) setStoreName(profile.name);
+        }
+      });
+    };
+
+    fetchProfile();
+    window.addEventListener('storeProfileUpdated', fetchProfile);
+    return () => window.removeEventListener('storeProfileUpdated', fetchProfile);
   }, []);
 
   const navItems = [

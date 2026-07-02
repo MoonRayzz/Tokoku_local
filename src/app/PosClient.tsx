@@ -65,21 +65,34 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
   const [manualCashierName, setManualCashierName] = useState('');
   const [manualShiftName, setManualShiftName] = useState('');
 
-  // Persist session across tabs
+  // Persist session across tabs & auto-logout when expired
   useEffect(() => {
-    const saved = localStorage.getItem('pos_session');
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        if (data.expiresAt && Date.now() < data.expiresAt) {
-          setActiveSession({ cashierName: data.cashierName, shiftId: data.shiftId });
-        } else {
+    const checkSession = () => {
+      const saved = localStorage.getItem('pos_session');
+      if (saved) {
+        try {
+          const data = JSON.parse(saved);
+          if (data.expiresAt && Date.now() < data.expiresAt) {
+            setActiveSession({ cashierName: data.cashierName, shiftId: data.shiftId });
+          } else {
+            localStorage.removeItem('pos_session');
+            setActiveSession(null);
+          }
+        } catch (e) {
           localStorage.removeItem('pos_session');
+          setActiveSession(null);
         }
-      } catch (e) {
-        localStorage.removeItem('pos_session');
+      } else {
+        setActiveSession(null);
       }
-    }
+    };
+
+    // Cek saat pertama kali load
+    checkSession();
+
+    // Cek setiap 1 menit agar auto-logout jika POS dibiarkan terbuka
+    const interval = setInterval(checkSession, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const toast = useToast();
@@ -141,7 +154,15 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
       
       setSearchInput('');
     } else {
-      toast.warning(`Produk "${searchInput}" tidak ditemukan.`);
+      const foundMember = members.find(m => m.phone === searchInput || m.id === searchInput);
+      if (foundMember) {
+        setSelectedMember(foundMember);
+        toast.success(`Member ${foundMember.name} berhasil dipilih.`);
+        setSearchInput('');
+        return;
+      }
+
+      toast.warning(`Produk atau Member "${searchInput}" tidak ditemukan.`);
       setSearchInput('');
     }
   };
@@ -255,9 +276,24 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
     setTimeout(() => searchInputRef.current?.focus(), 100);
   };
 
-  // Hitung Diskon Member
+  // Hitung Diskon Member (Khusus Barang Reguler/Non-Grosir)
   let activeTier: MemberTier | null = null;
   let discountAmount = 0;
+  
+  // Pisahkan subtotal grosir dan reguler
+  const { nonWholesaleTotal, wholesaleTotal } = items.reduce(
+    (acc, item) => {
+      const product = products.find((p) => p.id === item.productId);
+      const isWholesale = product && product.priceWholesale && product.wholesaleMinQty && item.quantity >= product.wholesaleMinQty;
+      if (isWholesale) {
+        acc.wholesaleTotal += item.subtotal;
+      } else {
+        acc.nonWholesaleTotal += item.subtotal;
+      }
+      return acc;
+    },
+    { nonWholesaleTotal: 0, wholesaleTotal: 0 }
+  );
 
   if (selectedMember) {
     const stats = memberStats[selectedMember.id] || { txCount: 0, totalSpent: 0 };
@@ -268,8 +304,8 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
       return meetsTx || meetsSpent;
     }) || (tiers.length > 0 ? tiers[tiers.length - 1] : null);
 
-    if (total > 0 && activeTier && total >= activeTier.minOrderAmount) {
-      const calculatedDiscount = (total * activeTier.discountPercentage) / 100;
+    if (nonWholesaleTotal > 0 && activeTier && nonWholesaleTotal >= activeTier.minOrderAmount) {
+      const calculatedDiscount = (nonWholesaleTotal * activeTier.discountPercentage) / 100;
       if (activeTier.maxDiscountAmount > 0 && calculatedDiscount > activeTier.maxDiscountAmount) {
         discountAmount = activeTier.maxDiscountAmount;
       } else {
@@ -445,7 +481,7 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               disabled={isLocked}
-              placeholder="Scan Barcode atau ketik SKU produk di sini…"
+              placeholder="Scan Barcode Produk / Member atau ketik nama/SKU di sini…"
               className="w-full bg-background border-none rounded-lg h-12 pl-12 pr-4 text-text-primary focus:ring-0 font-mono disabled:opacity-50"
               autoFocus
             />
@@ -472,7 +508,7 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
               {selectedMember ? (
                 <span className="text-sm text-text-primary">{selectedMember.name} ({selectedMember.phone})</span>
               ) : (
-                <span className="text-sm text-text-secondary">— Pelanggan Umum —</span>
+                <span className="text-sm text-text-secondary flex items-center gap-2"><span className="material-symbols-outlined text-[16px]">search</span> Cari / Pilih Member (Manual)</span>
               )}
               <span className="material-symbols-outlined text-text-secondary text-[18px]">expand_more</span>
             </div>
@@ -639,13 +675,26 @@ export default function PosClient({ products, members, tiers, memberStats, emplo
           {/* Footer total */}
           {items.length > 0 && (
             <div className="shrink-0 border-t border-border px-4 py-3 bg-surface-container-low flex justify-between items-end">
-              <div className="flex flex-col">
-                <span className="text-text-secondary text-sm">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-text-secondary text-sm font-medium">
                   {items.reduce((s, i) => s + i.quantity, 0)} item
                 </span>
+                
+                {wholesaleTotal > 0 && (
+                  <div className="flex flex-col text-[11px] text-text-secondary border-l-2 border-primary/20 pl-2 mt-1">
+                    <span className="text-text-primary">Subtotal Reguler: <span className="font-mono font-medium">{formatRp(nonWholesaleTotal)}</span></span>
+                    <span className="text-warning">Subtotal Grosir: <span className="font-mono font-medium">{formatRp(wholesaleTotal)}</span> <span className="opacity-70 italic">(Tidak Didiskon)</span></span>
+                  </div>
+                )}
+
                 {discountAmount > 0 && activeTier && (
-                  <span className="text-primary-container text-xs font-bold mt-1 bg-primary-container/10 px-2 py-1 rounded inline-block">
+                  <span className="text-primary-container text-xs font-bold bg-primary-container/10 px-2 py-1 rounded inline-block w-max mt-1">
                     ✓ Diskon {activeTier.name} ({activeTier.discountPercentage}%)
+                  </span>
+                )}
+                {selectedMember && nonWholesaleTotal > 0 && nonWholesaleTotal < (activeTier?.minOrderAmount || 0) && (
+                  <span className="text-warning text-xs font-medium mt-1">
+                    Beli Reguler min {formatRp(activeTier?.minOrderAmount || 0)} untuk diskon
                   </span>
                 )}
               </div>

@@ -16,7 +16,7 @@ export async function getProductBySku(sku: string) {
   }
 }
 
-export async function addProduct(formData: FormData) {
+export async function addProduct(formData: FormData, cashierName: string = 'Admin') {
   try {
     const name = formData.get('name') as string;
     let sku = formData.get('sku') as string;
@@ -81,7 +81,7 @@ export async function addProduct(formData: FormData) {
             stockBefore: 0,
             stockAfter: stock,
             notes: 'Stok awal saat pembuatan produk',
-            employeeId: 'Admin',
+            employeeId: cashierName,
             syncStatus: 'PENDING'
           }
         });
@@ -108,7 +108,7 @@ export async function addProduct(formData: FormData) {
   }
 }
 
-export async function restockProduct(id: string, additionalStock: number, formData?: FormData) {
+export async function restockProduct(id: string, additionalStock: number, updates?: any, cashierName: string = 'Admin') {
   try {
     if (additionalStock < 0) {
       return { success: false, error: 'Jumlah stok tambahan tidak valid.' };
@@ -117,20 +117,13 @@ export async function restockProduct(id: string, additionalStock: number, formDa
     await prisma.$transaction(async (tx) => {
       const dataToUpdate: any = { stock: { increment: additionalStock } };
       
-      if (formData) {
-        const name = formData.get('name') as string;
-        const priceBuyStr = formData.get('priceBuy') as string;
-        const priceRetail = formData.get('priceRetail') as string;
-        const minStockAlert = formData.get('minStockAlert') as string;
-        const priceWholesale = formData.get('priceWholesale') as string;
-        const wholesaleMinQty = formData.get('wholesaleMinQty') as string;
-
-        if (name) dataToUpdate.name = name;
-        dataToUpdate.priceBuy = priceBuyStr ? parseFloat(priceBuyStr) : null;
-        if (priceRetail) dataToUpdate.priceRetail = parseFloat(priceRetail);
-        if (minStockAlert) dataToUpdate.minStockAlert = parseInt(minStockAlert);
-        dataToUpdate.priceWholesale = priceWholesale ? parseFloat(priceWholesale) : null;
-        dataToUpdate.wholesaleMinQty = wholesaleMinQty ? parseInt(wholesaleMinQty) : null;
+      if (updates) {
+        if (updates.name) dataToUpdate.name = updates.name;
+        if (updates.priceBuy !== undefined) dataToUpdate.priceBuy = updates.priceBuy;
+        if (updates.priceRetail !== undefined) dataToUpdate.priceRetail = updates.priceRetail;
+        if (updates.minStockAlert !== undefined) dataToUpdate.minStockAlert = updates.minStockAlert;
+        if (updates.priceWholesale !== undefined) dataToUpdate.priceWholesale = updates.priceWholesale;
+        if (updates.wholesaleMinQty !== undefined) dataToUpdate.wholesaleMinQty = updates.wholesaleMinQty;
       }
 
       const productBefore = await tx.product.findUnique({ where: { id } });
@@ -149,7 +142,7 @@ export async function restockProduct(id: string, additionalStock: number, formDa
             stockBefore: productBefore.stock,
             stockAfter: updatedProduct.stock,
             notes: additionalStock > 0 ? 'Penambahan stok manual' : 'Pengurangan stok manual',
-            employeeId: 'Admin',
+            employeeId: cashierName,
             syncStatus: 'PENDING'
           }
         });

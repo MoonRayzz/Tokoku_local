@@ -38,7 +38,7 @@ export function PrintableReceipt({ transaction, items, storeConfig, className = 
             <img src={storeConfig.logoUrl} alt="Logo" className="h-8 object-contain mix-blend-multiply grayscale" />
           </div>
         )}
-        <div className="font-bold text-[16px] mb-1">{storeConfig.name.toUpperCase()}</div>
+        <div className="font-bold text-[16px] mb-1">{storeConfig.name}</div>
         <div className="break-words">{storeConfig.address}</div>
         {storeConfig.city && <div>{storeConfig.city}</div>}
         <div>Telp: {storeConfig.phone}</div>
@@ -89,6 +89,9 @@ export function PrintableReceipt({ transaction, items, storeConfig, className = 
           <div className="flex justify-between w-full mt-1">
             <span>Diskon Member</span>
             <span>-{formatRp(transaction.discountAmount)}</span>
+          </div>
+          <div className="text-[9px] italic text-gray-500 w-full text-right mt-0.5">
+            *Hanya berlaku untuk barang reguler
           </div>
         </>
       ) : null}

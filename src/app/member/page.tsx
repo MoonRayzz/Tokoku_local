@@ -5,7 +5,7 @@ import MemberManager from './MemberManager';
 import { PageTransition } from '@/components/ui/PageTransition';
 
 export default async function MemberPage() {
-  const [members, tiers, txGrouped] = await Promise.all([
+  const [members, tiers, txGrouped, storeProfile] = await Promise.all([
     prisma.member.findMany({
       where: { isVoid: false },
       orderBy: { joinedAt: 'desc' },
@@ -21,7 +21,8 @@ export default async function MemberPage() {
       _count: { id: true },
       _sum: { totalAmount: true },
       where: { memberId: { not: null }, isVoid: false }
-    })
+    }),
+    prisma.storeProfile.findUnique({ where: { id: 'local-store' } })
   ]);
 
   const memberStats: Record<string, { txCount: number, totalSpent: number }> = {};
@@ -36,7 +37,12 @@ export default async function MemberPage() {
 
   return (
     <PageTransition className="h-full">
-      <MemberManager initialMembers={members} tiers={tiers} memberStats={memberStats} />
+      <MemberManager 
+        initialMembers={members} 
+        tiers={tiers} 
+        memberStats={memberStats} 
+        storeProfile={storeProfile || { name: 'TokoKu', logoUrl: null }}
+      />
     </PageTransition>
   );
 }
